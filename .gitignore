@@ -8,3 +8,5 @@ logs/
 !logs/.keep
 engine.rb
 apario-contribution
+importable/._*
+importable/~$*
