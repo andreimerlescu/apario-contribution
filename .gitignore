@@ -1,0 +1,10 @@
+.idea/*
+tmp/*
+!tmp/.keep
+._*
+.DS_Store
+bin/
+logs/
+!logs/.keep
+engine.rb
+apario-contribution
