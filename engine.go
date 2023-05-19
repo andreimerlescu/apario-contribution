@@ -100,8 +100,8 @@ func main() {
 		panic("-dir is a required flag to run this program")
 	}
 
-	logFilename := fmt.Sprintf("./logs/engine-%04d-%02d-%02d-%02d-%02d-%02d.log",
-		startedAt.Year(), startedAt.Month(), startedAt.Day(), startedAt.Hour(), startedAt.Minute(), startedAt.Second())
+	logFilename := filepath.Join(".", "logs", fmt.Sprintf("engine-%04d-%02d-%02d-%02d-%02d-%02d.log",
+		startedAt.Year(), startedAt.Month(), startedAt.Day(), startedAt.Hour(), startedAt.Minute(), startedAt.Second()))
 	logFile, logFileErr := os.OpenFile(logFilename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	if logFileErr != nil {
 		log.Fatal("Failed to open log file: ", logFileErr)
