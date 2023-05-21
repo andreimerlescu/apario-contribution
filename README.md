@@ -11,6 +11,17 @@ go build -a -race -v -o apario-contribution .
 
 ### Runtime Requirements
 
+You'll need to download and install the dependencies:
+
+```shell
+git clone git@github.com:andreimerlescu/apario-contribution.git
+cd apario-contribution
+make install
+make build
+```
+
+You'll also need to ensure that the following binaries are installed on the host that will execute this program.
+
 ```go
 var RawBinaries = []string{
 	"pdfcpu",
@@ -63,14 +74,51 @@ If you're missing any of these binaries, please consult with your preferred sear
 
 ## Running
 
+There are two ways you can run the program, the first and most pure way of doing it is to directly call the built binary
+with your own arguments, such as:
+
 ```shell
 time ./apario-contribution -dir tmp -file importable/jfk2023.xlsx -limit 369 -buffer 4550819
 ```
+
+The other way of doing it is much easier, this looks like:
+
+```shell
+make run jfk2023.xlsx
+```
+
+You can replace `jfk2023.xlsx` with the file inside the `importable/` directory. The script supports XLSX, CSV and PSV
+file extensions, but the formatting of the data does matter. For instance, if you're running on an XLSX, it will only
+process the first sheet. All other sheets are ignored by the script. It also assumes that the first line is the headers.
 
 Do not be surprised if this process takes a very long to complete depending on how fast your system is. The script is
 designed to technically be resumable but it does not do a very good job with it at the moment. For instance, if the PDF
 is already downloaded, it won't re-download it. However, if the process exits before it's completed, and you resume it,
 it'll regenerate the manifest files, thumbnails, and re-perform the OCR on the project.
+
+### Command Line Arguments
+
+| Flag                   | Default          | Notes                                                                  |
+|------------------------|------------------|------------------------------------------------------------------------|
+| `file`                 | __<blank>__      | CSV file of URL + Metadata.                                            | 
+| `dir`                  | __<blank>__      | Path of the directory you want the export to be generated into.        | 
+| `limit`                | `1`              | Number of rows to concurrently process.                                | 
+| `buffer`               | `172032` (bytes) | Memory allocation for CSV buffer (min 168 * 1024 = 168KB)              | 
+| `flag_b_sem_tesseract` | `1`              | Semaphore Limiter for `tesseract` binary.                              | 
+| `flag_b_sem_download`  | `2`              | Semaphore Limiter for downloading PDF files from URLs.                 | 
+| `flag_b_sem_pdfcpu`    | `17`             | Semaphore Limiter for `pdfcpu` binary.                                 | 
+| `flag_b_sem_gs`        | `17`             | Semaphore Limiter for `gs` binary.                                     | 
+| `flag_b_sem_pdftotext` | `17`             | Semaphore Limiter for `pdftotext` binary.                              | 
+| `flag_b_sem_convert`   | `17`             | Semaphore Limiter for `convert` binary.                                | 
+| `flag_b_sem_pdftoppm`  | `17`             | Semaphore Limiter for `pdftoppm` binary.                               | 
+| `flag_g_sem_png2jpg`   | `17`             | Semaphore Limiter for converting PNG images to JPG.                    | 
+| `flag_g_sem_resize`    | `17`             | Semaphore Limiter for resize PNG or JPG images.                        | 
+| `flag_g_sem_shafile`   | `36`             | Semaphore Limiter for calculating the SHA256 checksum of files.        | 
+| `flag_g_sem_watermark` | `36`             | Semaphore Limiter for adding a watermark to an image.                  | 
+| `flag_g_sem_darkimage` | `36`             | Semaphore Limiter for converting an image to dark mode.                | 
+| `flag_g_sem_filedata`  | `369`            | Semaphore Limiter for writing metadata about a processed file to JSON. | 
+| `flag_g_sem_shastring` | `369`            | Semaphore Limiter for calculating the SHA256 checksum of a string.     | 
+| `flag_g_sem_wjsonfile` | `369`            | Semaphore Limiter for writing a JSON file to disk.                     | 
 
 ## Output
 

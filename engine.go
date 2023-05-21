@@ -38,10 +38,26 @@ var RawBinaries = []string{
 	"gs",
 	"pdftotext",
 	"convert",
-	"composite",
 	"pdftoppm",
 	"tesseract",
 }
+var (
+	flag_b_sem_tesseract *int
+	flag_b_sem_download  *int
+	flag_b_sem_pdfcpu    *int
+	flag_b_sem_gs        *int
+	flag_b_sem_pdftotext *int
+	flag_b_sem_convert   *int
+	flag_b_sem_pdftoppm  *int
+	flag_g_sem_png2jpg   *int
+	flag_g_sem_resize    *int
+	flag_g_sem_shafile   *int
+	flag_g_sem_watermark *int
+	flag_g_sem_darkimage *int
+	flag_g_sem_filedata  *int
+	flag_g_sem_shastring *int
+	flag_g_sem_wjsonfile *int
+)
 
 func main() {
 
@@ -65,6 +81,22 @@ func main() {
 	dirFlag := flag.String("dir", "", "Path of the directory you want the export to be generated into.")
 	semaphoreLimitFlag := flag.Int("limit", SemaLimiter, "Number of rows to concurrently process.")
 	fileBufferSize := flag.Int("buffer", BufferSize, "Memory allocation for CSV buffer (min 168 * 1024 = 168KB)")
+
+	flag_b_sem_tesseract = flag.Int("tesseract", 1, "Semaphore Limiter for `tesseract` binary.")
+	flag_b_sem_download = flag.Int("download", 2, "Semaphore Limiter for downloading PDF files from URLs.")
+	flag_b_sem_pdfcpu = flag.Int("pdfcpu", 17, "Semaphore Limiter for `pdfcpu` binary.")
+	flag_b_sem_gs = flag.Int("gs", 17, "Semaphore Limiter for `gs` binary.")
+	flag_b_sem_pdftotext = flag.Int("pdftotext", 17, "Semaphore Limiter for `pdftotext` binary.")
+	flag_b_sem_convert = flag.Int("convert", 17, "Semaphore Limiter for `convert` binary.")
+	flag_b_sem_pdftoppm = flag.Int("pdftoppm", 17, "Semaphore Limiter for `pdftoppm` binary.")
+	flag_g_sem_png2jpg = flag.Int("png2jpg", 17, "Semaphore Limiter for converting PNG images to JPG.")
+	flag_g_sem_resize = flag.Int("resize", 17, "Semaphore Limiter for resize PNG or JPG images.")
+	flag_g_sem_shafile = flag.Int("shafile", 36, "Semaphore Limiter for calculating the SHA256 checksum of files.")
+	flag_g_sem_watermark = flag.Int("watermark", 36, "Semaphore Limiter for adding a watermark to an image.")
+	flag_g_sem_darkimage = flag.Int("darkimage", 36, "Semaphore Limiter for converting an image to dark mode.")
+	flag_g_sem_filedata = flag.Int("filedata", 369, "Semaphore Limiter for writing metadata about a processed file to JSON.")
+	flag_g_sem_shastring = flag.Int("shastring", 369, "Semaphore Limiter for calculating the SHA256 checksum of a string.")
+	flag_g_sem_wjsonfile = flag.Int("wjsonfile", 369, "Semaphore Limiter for writing a JSON file to disk.")
 
 	flag.Usage = func() {
 		_, err := fmt.Fprintf(os.Stderr, "Usage: %s -file FILE -output-dir DIRECTORY [ -limit INT | -buffer INT ]\n", os.Args[0])

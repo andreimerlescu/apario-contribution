@@ -34,6 +34,8 @@ import (
 )
 
 func fileHasData(filename string) (bool, error) {
+	g_sem_filedata.Acquire()
+	defer g_sem_filedata.Release()
 	_, existsErr := os.Stat(filename)
 	if os.IsNotExist(existsErr) {
 		return false, fmt.Errorf("no such file")
@@ -148,6 +150,8 @@ func IsDir(in string) bool {
 }
 
 func FileSha512(file *os.File) (checksum string) {
+	g_sem_shafile.Acquire()
+	defer g_sem_shafile.Release()
 	hash := sha512.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		panic(err)
@@ -174,8 +178,6 @@ func cryptoRandInt(min, max int) (int, error) {
 }
 
 func downloadFile(ctx context.Context, url string, output string) error {
-	DownloadSemaphore.Acquire()
-	defer DownloadSemaphore.Release()
 	var err error
 	for i := 0; i < maxAttempts; i++ {
 		err = tryDownloadFile(ctx, url, output)
@@ -201,6 +203,8 @@ func downloadFile(ctx context.Context, url string, output string) error {
 }
 
 func tryDownloadFile(ctx context.Context, url string, output string) error {
+	b_sem_download.Acquire()
+	defer b_sem_download.Release()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -223,6 +227,8 @@ func tryDownloadFile(ctx context.Context, url string, output string) error {
 }
 
 func Sha256(in string) (checksum string) {
+	g_sem_shastring.Acquire()
+	defer g_sem_shastring.Release()
 	hash := sha256.New()
 	hash.Write([]byte(in))
 	checksum = hex.EncodeToString(hash.Sum(nil))
@@ -230,6 +236,8 @@ func Sha256(in string) (checksum string) {
 }
 
 func resizePng(imgFile *os.File, newWidth int, outputFilename string) error {
+	g_sem_resize.Acquire()
+	defer g_sem_resize.Release()
 	if newWidth <= 0 {
 		return errors.New("invalid width provided")
 	}
@@ -267,6 +275,8 @@ func resizePng(imgFile *os.File, newWidth int, outputFilename string) error {
 }
 
 func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
+	g_sem_resize.Acquire()
+	defer g_sem_resize.Release()
 	if newWidth <= 0 {
 		return errors.New("invalid width provided")
 	}
@@ -308,6 +318,8 @@ func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
 }
 
 func convertAndOptimizePNG(imgFile *os.File, outputFilename string) error {
+	g_sem_png2jpg.Acquire()
+	defer g_sem_png2jpg.Release()
 	imgFile.Seek(0, 0)
 	img, err := imaging.Decode(imgFile)
 	if err != nil {
@@ -333,6 +345,8 @@ func convertAndOptimizePNG(imgFile *os.File, outputFilename string) error {
 }
 
 func overlayImages(jpgFile, pngFile *os.File, outputFilename string) error {
+	g_sema_watermark.Acquire()
+	defer g_sema_watermark.Release()
 	jpgFile.Seek(0, 0)
 	baseImg, _, err := image.Decode(jpgFile)
 	if err != nil {
@@ -397,7 +411,9 @@ func colorDistance(c1, c2 color.Color) uint64 {
 	return uint64(dr*dr + dg*dg + db*db)
 }
 
-func ConvertToDarkMode(img *os.File) (*os.File, error) {
+func ConvertToDarkMode(img *os.File, directory, outputFilename string) (*os.File, error) {
+	g_sem_darkimage.Acquire()
+	defer g_sem_darkimage.Release()
 	img.Seek(0, 0)
 	srcImage, _, err := image.Decode(img)
 	if err != nil {
@@ -419,7 +435,7 @@ func ConvertToDarkMode(img *os.File) (*os.File, error) {
 
 		}
 	}
-	tempFile, err := os.CreateTemp("", "darkmode_*.jpg")
+	tempFile, err := os.CreateTemp(directory, outputFilename)
 	if err != nil {
 		return img, err
 	}
@@ -524,6 +540,8 @@ func NewIdentifier(length int) string {
 }
 
 func WritePendingPageToJson(pp PendingPage, outputPath string) error {
+	g_sem_wjsonfile.Acquire()
+	defer g_sem_wjsonfile.Release()
 	file, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -542,6 +560,8 @@ func WritePendingPageToJson(pp PendingPage, outputPath string) error {
 }
 
 func WriteResultDataToJson(rd ResultData) error {
+	g_sem_wjsonfile.Acquire()
+	defer g_sem_wjsonfile.Release()
 	file, err := os.OpenFile(rd.RecordPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err

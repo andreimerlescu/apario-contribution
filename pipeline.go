@@ -26,8 +26,10 @@ func validatePdf(record ResultData) (ResultData, error) {
 		var cmd0_validate_pdf_stderr bytes.Buffer
 		cmd0_validate_pdf.Stdout = &cmd0_validate_pdf_stdout
 		cmd0_validate_pdf.Stderr = &cmd0_validate_pdf_stderr
-
+		b_sem_pdfcpu.Acquire()
 		cmd0_validate_pdf_err := cmd0_validate_pdf.Run()
+		b_sem_pdfcpu.Release()
+
 		if cmd0_validate_pdf_err != nil {
 			return record, fmt.Errorf("Failed to execute `pdfcpu validate %v` due to error: %s\n", record.PDFPath, cmd0_validate_pdf_err)
 		}
@@ -35,7 +37,6 @@ func validatePdf(record ResultData) (ResultData, error) {
 		if !strings.Contains(cmd0_validate_pdf_stdout.String(), "validation ok") {
 			return record, fmt.Errorf("failed to validate the pdf %v\n\tSTDOUT = %v", record.PDFPath, cmd0_validate_pdf_stdout.String())
 		}
-
 		/*
 			gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o REPLACE_WITH_FILE_PATH REPLACE_WITH_FILE_PATH
 		*/
@@ -44,8 +45,9 @@ func validatePdf(record ResultData) (ResultData, error) {
 		var cmd1_convert_pdf_stderr bytes.Buffer
 		cmd1_convert_pdf.Stdout = &cmd1_convert_pdf_stdout
 		cmd1_convert_pdf.Stderr = &cmd1_convert_pdf_stderr
-
+		b_sem_gs.Acquire()
 		cmd1_convert_pdf_err := cmd1_convert_pdf.Run()
+		b_sem_gs.Release()
 		if cmd1_convert_pdf_err != nil {
 			return record, fmt.Errorf("Failed to execute command `gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o %v %v` due to error: %s\n", record.PDFPath, record.PDFPath, cmd1_convert_pdf_err)
 		}
@@ -58,8 +60,9 @@ func validatePdf(record ResultData) (ResultData, error) {
 		var cmd2_optimize_pdf_stderr bytes.Buffer
 		cmd2_optimize_pdf.Stdout = &cmd2_optimize_pdf_stdout
 		cmd2_optimize_pdf.Stderr = &cmd2_optimize_pdf_stderr
-
+		b_sem_pdfcpu.Acquire()
 		cmd2_optimize_pdf_err := cmd2_optimize_pdf.Run()
+		b_sem_pdfcpu.Release()
 		if cmd2_optimize_pdf_err != nil {
 			return record, fmt.Errorf("Failed to execute command `pdfcpu optimize %v` due to error: %s\n", record.PDFPath, cmd2_optimize_pdf_err)
 		}
@@ -85,8 +88,9 @@ func extractPlainTextFromPdf(record ResultData) {
 		var cmd4_extract_text_pdf_stderr bytes.Buffer
 		cmd4_extract_text_pdf.Stdout = &cmd4_extract_text_pdf_stdout
 		cmd4_extract_text_pdf.Stderr = &cmd4_extract_text_pdf_stderr
-
+		b_sem_pdftotext.Acquire()
 		cmd4_extract_text_pdf_err := cmd4_extract_text_pdf.Run()
+		b_sem_pdftotext.Release()
 		if cmd4_extract_text_pdf_err != nil {
 			log.Printf("Failed to execute command `pdftotext %v %v` due to error: %s\n", record.PDFPath, record.ExtractedTextPath, cmd4_extract_text_pdf_err)
 			return
@@ -124,8 +128,9 @@ func extractPagesFromPdf(record ResultData) {
 		var cmd5_extract_pages_in_pdf_stderr bytes.Buffer
 		cmd5_extract_pages_in_pdf.Stdout = &cmd5_extract_pages_in_pdf_stdout
 		cmd5_extract_pages_in_pdf.Stderr = &cmd5_extract_pages_in_pdf_stderr
-
+		b_sem_pdfcpu.Acquire()
 		cmd5_extract_pages_in_pdf_err := cmd5_extract_pages_in_pdf.Run()
+		b_sem_pdfcpu.Release()
 		if cmd5_extract_pages_in_pdf_err != nil {
 			log.Printf("Failed to execute command `pdfcpu extract -mode page %v %v` due to error: %s\n", record.PDFPath, pagesDir, cmd5_extract_pages_in_pdf_err)
 			return
@@ -209,8 +214,9 @@ func convertPageToPng(pp PendingPage) {
 		var cmd_stderr bytes.Buffer
 		cmd.Stdout = &cmd_stdout
 		cmd.Stderr = &cmd_stderr
-
+		b_sem_pdftoppm.Acquire()
 		cmd_err := cmd.Run()
+		b_sem_pdftoppm.Release()
 		if cmd_err != nil {
 			log.Printf("failed to convert page %v to png %v due to error: %s\n", filepath.Base(pp.PDFPath), pp.Light.Original, cmd_err)
 			return
@@ -292,8 +298,9 @@ func generateDarkThumbnails(pp PendingPage) {
 		var cmdA_stderr bytes.Buffer
 		cmdA.Stdout = &cmdA_stdout
 		cmdA.Stderr = &cmdA_stderr
-
+		b_sem_convert.Acquire()
 		cmdA_err := cmdA.Run()
+		b_sem_convert.Release()
 		if cmdA_err != nil {
 			log.Printf("failed to convert %v into %v due to error: %s\n", pp.Light.Original, pp.Dark.Original, cmdA_err)
 			return
@@ -305,8 +312,9 @@ func generateDarkThumbnails(pp PendingPage) {
 		var cmdB_stderr bytes.Buffer
 		cmdB.Stdout = &cmdB_stdout
 		cmdB.Stderr = &cmdB_stderr
-
+		b_sem_convert.Acquire()
 		cmdB_err := cmdB.Run()
+		b_sem_convert.Release()
 		if cmdB_err != nil {
 			log.Printf("failed to convert %v into %v due to error: %s\n", pp.Light.Original, pp.Dark.Original, cmdB_err)
 			return
@@ -358,10 +366,7 @@ func performOcrOnPdf(pp PendingPage) {
 		log.Printf("completed performOcrOnPdf now sending %v (%v.%v) -> ch_ConvertToJpg ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
 		ch_ConvertToJpg <- pp
 	}()
-	log.Printf("started performOcrOnPdf(%v.%v) = %v (WAITING)", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
-	OCRSemaphore.Acquire()
-	log.Printf("running performOcrOnPdf(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
-	defer OCRSemaphore.Release()
+
 	if ok, err := fileHasData(pp.OCRTextPath); !ok || err != nil {
 		/*
 			tesseract REPLACE_WITH_FILE_PATH REPLACE_WITH_TEXT_OUTPUT_FILE_PATH -l eng --psm 1
@@ -380,8 +385,12 @@ func performOcrOnPdf(pp PendingPage) {
 		var cmd8_stderr bytes.Buffer
 		cmd8.Stdout = &cmd8_stdout
 		cmd8.Stderr = &cmd8_stderr
-
+		log.Printf("started performOcrOnPdf(%v.%v) = %v (WAITING)", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
+		b_sem_tesseract.Acquire()
+		log.Printf("running performOcrOnPdf(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 		cmd8_err := cmd8.Run()
+		b_sem_tesseract.Release()
+		log.Printf("completed performOcrOnPdf(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 		if cmd8_err != nil {
 			log.Printf("Command `tesseract %v %v -l eng --psm 1` failed with error: %s\n", img, pp.OCRTextPath, cmd8_err)
 			return

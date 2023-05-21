@@ -16,8 +16,23 @@ var db_pages sync.Map
 var ch_Done = make(chan struct{}, 1)
 var PerformingWork = sync.WaitGroup{}
 
-var OCRSemaphore = sema.New(17)
-var DownloadSemaphore = sema.New(3)
+var (
+	b_sem_tesseract  = sema.New(*flag_b_sem_tesseract)
+	b_sem_download   = sema.New(*flag_b_sem_download)
+	b_sem_pdfcpu     = sema.New(*flag_b_sem_pdfcpu)
+	b_sem_gs         = sema.New(*flag_b_sem_gs)
+	b_sem_pdftotext  = sema.New(*flag_b_sem_pdftotext)
+	b_sem_convert    = sema.New(*flag_b_sem_convert)
+	b_sem_pdftoppm   = sema.New(*flag_b_sem_pdftoppm)
+	g_sem_png2jpg    = sema.New(*flag_g_sem_png2jpg)
+	g_sem_resize     = sema.New(*flag_g_sem_resize)
+	g_sem_shafile    = sema.New(*flag_g_sem_shafile)
+	g_sema_watermark = sema.New(*flag_g_sem_watermark)
+	g_sem_darkimage  = sema.New(*flag_g_sem_darkimage)
+	g_sem_filedata   = sema.New(*flag_g_sem_filedata)
+	g_sem_shastring  = sema.New(*flag_g_sem_shastring)
+	g_sem_wjsonfile  = sema.New(*flag_g_sem_wjsonfile)
+)
 
 var ch_ExtractText = make(chan ResultData, SemaLimiter)
 var ch_ExtractPages = make(chan ResultData, SemaLimiter)
