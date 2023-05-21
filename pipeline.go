@@ -15,50 +15,54 @@ func validatePdf(record ResultData) (ResultData, error) {
 	PerformingWork.Add(1)
 	defer PerformingWork.Done()
 	log.Printf("started validatePdf(%v) = %v", record.Identifier, record.PDFPath)
-	/*
-		pdfcpu validate REPLACE_WITH_FILE_PATH | grep 'validation ok'
-	*/
-	cmd0_validate_pdf := exec.Command(Binaries["pdfcpu"], "validate", record.PDFPath)
-	var cmd0_validate_pdf_stdout bytes.Buffer
-	var cmd0_validate_pdf_stderr bytes.Buffer
-	cmd0_validate_pdf.Stdout = &cmd0_validate_pdf_stdout
-	cmd0_validate_pdf.Stderr = &cmd0_validate_pdf_stderr
 
-	cmd0_validate_pdf_err := cmd0_validate_pdf.Run()
-	if cmd0_validate_pdf_err != nil {
-		return record, fmt.Errorf("Failed to execute command: %s\n", cmd0_validate_pdf_err)
-	}
+	_, rjsonErr := os.Stat(record.RecordPath)
+	if os.IsNotExist(rjsonErr) {
+		/*
+			pdfcpu validate REPLACE_WITH_FILE_PATH | grep 'validation ok'
+		*/
+		cmd0_validate_pdf := exec.Command(Binaries["pdfcpu"], "validate", record.PDFPath)
+		var cmd0_validate_pdf_stdout bytes.Buffer
+		var cmd0_validate_pdf_stderr bytes.Buffer
+		cmd0_validate_pdf.Stdout = &cmd0_validate_pdf_stdout
+		cmd0_validate_pdf.Stderr = &cmd0_validate_pdf_stderr
 
-	if !strings.Contains(cmd0_validate_pdf_stdout.String(), "validation ok") {
-		return record, fmt.Errorf("failed to validate the pdf %v\n\tSTDOUT = %v", record.PDFPath, cmd0_validate_pdf_stdout.String())
-	}
+		cmd0_validate_pdf_err := cmd0_validate_pdf.Run()
+		if cmd0_validate_pdf_err != nil {
+			return record, fmt.Errorf("Failed to execute `pdfcpu validate %v` due to error: %s\n", record.PDFPath, cmd0_validate_pdf_err)
+		}
 
-	/*
-		gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o REPLACE_WITH_FILE_PATH REPLACE_WITH_FILE_PATH
-	*/
-	cmd1_convert_pdf := exec.Command(Binaries["gs"], "-q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o", record.PDFPath, record.PDFPath)
-	var cmd1_convert_pdf_stdout bytes.Buffer
-	var cmd1_convert_pdf_stderr bytes.Buffer
-	cmd1_convert_pdf.Stdout = &cmd1_convert_pdf_stdout
-	cmd1_convert_pdf.Stderr = &cmd1_convert_pdf_stderr
+		if !strings.Contains(cmd0_validate_pdf_stdout.String(), "validation ok") {
+			return record, fmt.Errorf("failed to validate the pdf %v\n\tSTDOUT = %v", record.PDFPath, cmd0_validate_pdf_stdout.String())
+		}
 
-	cmd1_convert_pdf_err := cmd1_convert_pdf.Run()
-	if cmd1_convert_pdf_err != nil {
-		return record, fmt.Errorf("Failed to execute command: %s\n", cmd1_convert_pdf_err)
-	}
+		/*
+			gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o REPLACE_WITH_FILE_PATH REPLACE_WITH_FILE_PATH
+		*/
+		cmd1_convert_pdf := exec.Command(Binaries["gs"], "-q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o", record.PDFPath, record.PDFPath)
+		var cmd1_convert_pdf_stdout bytes.Buffer
+		var cmd1_convert_pdf_stderr bytes.Buffer
+		cmd1_convert_pdf.Stdout = &cmd1_convert_pdf_stdout
+		cmd1_convert_pdf.Stderr = &cmd1_convert_pdf_stderr
 
-	/*
-		pdfcpu optimize REPLACE_WITH_FILE_PATH
-	*/
-	cmd2_optimize_pdf := exec.Command(Binaries["pdfcpu"], "optimize", record.PDFPath)
-	var cmd2_optimize_pdf_stdout bytes.Buffer
-	var cmd2_optimize_pdf_stderr bytes.Buffer
-	cmd2_optimize_pdf.Stdout = &cmd2_optimize_pdf_stdout
-	cmd2_optimize_pdf.Stderr = &cmd2_optimize_pdf_stderr
+		cmd1_convert_pdf_err := cmd1_convert_pdf.Run()
+		if cmd1_convert_pdf_err != nil {
+			return record, fmt.Errorf("Failed to execute command `gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o %v %v` due to error: %s\n", record.PDFPath, record.PDFPath, cmd1_convert_pdf_err)
+		}
 
-	cmd2_optimize_pdf_err := cmd2_optimize_pdf.Run()
-	if cmd2_optimize_pdf_err != nil {
-		return record, fmt.Errorf("Failed to execute command: %s\n", cmd2_optimize_pdf_err)
+		/*
+			pdfcpu optimize REPLACE_WITH_FILE_PATH
+		*/
+		cmd2_optimize_pdf := exec.Command(Binaries["pdfcpu"], "optimize", record.PDFPath)
+		var cmd2_optimize_pdf_stdout bytes.Buffer
+		var cmd2_optimize_pdf_stderr bytes.Buffer
+		cmd2_optimize_pdf.Stdout = &cmd2_optimize_pdf_stdout
+		cmd2_optimize_pdf.Stderr = &cmd2_optimize_pdf_stderr
+
+		cmd2_optimize_pdf_err := cmd2_optimize_pdf.Run()
+		if cmd2_optimize_pdf_err != nil {
+			return record, fmt.Errorf("Failed to execute command `pdfcpu optimize %v` due to error: %s\n", record.PDFPath, cmd2_optimize_pdf_err)
+		}
 	}
 
 	return record, nil
@@ -72,21 +76,22 @@ func extractPlainTextFromPdf(record ResultData) {
 		ch_ExtractPages <- record
 	}()
 	log.Printf("started extractPlainTextFromPdf(%v) = %v", record.Identifier, record.PDFPath)
-	/*
-		pdftotext REPLACE_WITH_FILE_PATH REPLACE_WITH_TEXT_OUTPUT_FILE_PATH
-	*/
-	cmd4_extract_text_pdf := exec.Command(Binaries["pdftotext"], record.PDFPath, record.OCRTextPath)
-	var cmd4_extract_text_pdf_stdout bytes.Buffer
-	var cmd4_extract_text_pdf_stderr bytes.Buffer
-	cmd4_extract_text_pdf.Stdout = &cmd4_extract_text_pdf_stdout
-	cmd4_extract_text_pdf.Stderr = &cmd4_extract_text_pdf_stderr
+	if ok, err := fileHasData(record.ExtractedTextPath); !ok || err != nil {
+		/*
+			pdftotext REPLACE_WITH_FILE_PATH REPLACE_WITH_TEXT_OUTPUT_FILE_PATH
+		*/
+		cmd4_extract_text_pdf := exec.Command(Binaries["pdftotext"], record.PDFPath, record.ExtractedTextPath)
+		var cmd4_extract_text_pdf_stdout bytes.Buffer
+		var cmd4_extract_text_pdf_stderr bytes.Buffer
+		cmd4_extract_text_pdf.Stdout = &cmd4_extract_text_pdf_stdout
+		cmd4_extract_text_pdf.Stderr = &cmd4_extract_text_pdf_stderr
 
-	cmd4_extract_text_pdf_err := cmd4_extract_text_pdf.Run()
-	if cmd4_extract_text_pdf_err != nil {
-		log.Printf("Failed to execute command: %s\n", cmd4_extract_text_pdf_err)
-		return
+		cmd4_extract_text_pdf_err := cmd4_extract_text_pdf.Run()
+		if cmd4_extract_text_pdf_err != nil {
+			log.Printf("Failed to execute command `pdftotext %v %v` due to error: %s\n", record.PDFPath, record.ExtractedTextPath, cmd4_extract_text_pdf_err)
+			return
+		}
 	}
-
 }
 
 func extractPagesFromPdf(record ResultData) {
@@ -122,14 +127,16 @@ func extractPagesFromPdf(record ResultData) {
 
 		cmd5_extract_pages_in_pdf_err := cmd5_extract_pages_in_pdf.Run()
 		if cmd5_extract_pages_in_pdf_err != nil {
-			fmt.Printf("Failed to execute command: %s\n", cmd5_extract_pages_in_pdf_err)
+			log.Printf("Failed to execute command `pdfcpu extract -mode page %v %v` due to error: %s\n", record.PDFPath, pagesDir, cmd5_extract_pages_in_pdf_err)
 			return
 		}
+	} else {
+		log.Printf("not performing `pdfcpu extrace -mode page %v %v` because the directory %v already has PDFs inside it", record.PDFPath, pagesDir, pagesDir)
 	}
 
 	pagesDirWalkErr := filepath.Walk(pagesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			fmt.Printf("Error accessing a path %q: %v\n", path, err)
+			log.Printf("Error accessing a path %q: %v\n", path, err)
 			return err
 		}
 
@@ -192,25 +199,28 @@ func convertPageToPng(pp PendingPage) {
 	/*
 		pdf_to_png: "pdftoppm REPLACE_WITH_PNG_OPTS REPLACE_WITH_FILE_PATH REPLACE_WITH_PNG_PATH",
 	*/
-	originalFilename := strings.ReplaceAll(pp.Light.Original, `.png`, ``)
-	cmd := exec.Command(Binaries["pdftoppm"],
-		`-r`, `369`, `-png`, `-freetype`, `yes`, `-aa`, `yes`, `-aaVector`, `yes`, `-thinlinemode`, `solid`,
-		pp.PDFPath, originalFilename)
-	var cmd_stdout bytes.Buffer
-	var cmd_stderr bytes.Buffer
-	cmd.Stdout = &cmd_stdout
-	cmd.Stderr = &cmd_stderr
+	_, loErr := os.Stat(pp.Light.Original)
+	if os.IsNotExist(loErr) {
+		originalFilename := strings.ReplaceAll(pp.Light.Original, `.png`, ``)
+		cmd := exec.Command(Binaries["pdftoppm"],
+			`-r`, `369`, `-png`, `-freetype`, `yes`, `-aa`, `yes`, `-aaVector`, `yes`, `-thinlinemode`, `solid`,
+			pp.PDFPath, originalFilename)
+		var cmd_stdout bytes.Buffer
+		var cmd_stderr bytes.Buffer
+		cmd.Stdout = &cmd_stdout
+		cmd.Stderr = &cmd_stderr
 
-	cmd_err := cmd.Run()
-	if cmd_err != nil {
-		fmt.Printf("Failed to execute command: %s\n", cmd_err)
-		return
-	}
+		cmd_err := cmd.Run()
+		if cmd_err != nil {
+			log.Printf("failed to convert page %v to png %v due to error: %s\n", filepath.Base(pp.PDFPath), pp.Light.Original, cmd_err)
+			return
+		}
 
-	pngRenameErr := os.Rename(fmt.Sprintf("%v-1.png", originalFilename), fmt.Sprintf("%v.png", originalFilename))
-	if pngRenameErr != nil {
-		log.Printf("failed to rename the jpg %v due to error: %v", originalFilename, pngRenameErr)
-		return
+		pngRenameErr := os.Rename(fmt.Sprintf("%v-1.png", originalFilename), fmt.Sprintf("%v.png", originalFilename))
+		if pngRenameErr != nil {
+			log.Printf("failed to rename the jpg %v due to error: %v", originalFilename, pngRenameErr)
+			return
+		}
 	}
 
 	log.Printf("completed convertPageToPng now sending %v (%v.%v) -> ch_GenerateLight ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
@@ -226,30 +236,40 @@ func generateLightThumbnails(pp PendingPage) {
 		ch_GenerateDark <- pp
 	}()
 	log.Printf("started generateLightThumbnails(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
-	// create the large thumbnail from the JPG
+
 	original, err := os.Open(pp.Light.Original)
 	if err != nil {
 		log.Printf("failed to open pp.OriginalPath(%v) due to error %v", pp.Light.Original, err)
 		return
 	}
-	lgResizeErr := resizePng(original, 999, pp.Light.Large)
-	if lgResizeErr != nil {
-		log.Printf("failed to resize jpg %v due to error %v", pp.Light.Large, lgResizeErr)
-		return
+	// create the large thumbnail from the JPG
+	_, llgErr := os.Stat(pp.Light.Large)
+	if os.IsNotExist(llgErr) {
+		lgResizeErr := resizePng(original, 999, pp.Light.Large)
+		if lgResizeErr != nil {
+			log.Printf("failed to resize jpg %v due to error %v", pp.Light.Large, lgResizeErr)
+			return
+		}
 	}
 
 	// create the medium thumbnail from the JPG
-	mdResizeErr := resizePng(original, 666, pp.Light.Medium)
-	if mdResizeErr != nil {
-		log.Printf("failed to resize jpg %v due to error %v", pp.Light.Medium, mdResizeErr)
-		return
+	_, lmdErr := os.Stat(pp.Light.Medium)
+	if os.IsNotExist(lmdErr) {
+		mdResizeErr := resizePng(original, 666, pp.Light.Medium)
+		if mdResizeErr != nil {
+			log.Printf("failed to resize jpg %v due to error %v", pp.Light.Medium, mdResizeErr)
+			return
+		}
 	}
 
 	// create the small thumbnail from the JPG
-	smResizeErr := resizePng(original, 333, pp.Light.Small)
-	if smResizeErr != nil {
-		log.Printf("failed to resize jpg %v due to error %v", pp.Light.Small, smResizeErr)
-		return
+	_, lsmErr := os.Stat(pp.Light.Small)
+	if os.IsNotExist(lsmErr) {
+		smResizeErr := resizePng(original, 333, pp.Light.Small)
+		if smResizeErr != nil {
+			log.Printf("failed to resize jpg %v due to error %v", pp.Light.Small, smResizeErr)
+			return
+		}
 	}
 
 }
@@ -264,56 +284,69 @@ func generateDarkThumbnails(pp PendingPage) {
 	log.Printf("started generateDarkThumbnails(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 	// task: the pp.Light.Original into pp.Dark.Original
 
-	// convert REPLACE_WITH_OUTPUT_PNG_PAGE_FILENAME -channel rgba -matte -fill 'rgba(250,226,203,1)' -fuzz 45% -opaque 'rgba(76,76,76,1)' -flatten REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME
-	cmdA := exec.Command(Binaries["convert"], pp.Light.Original, "-channel", "rgba", "-matte", "-fill", `rgba(250,226,203,1)`, "-fuzz", "45%", "-opaque", `rgba(76,76,76,1)`, "-flatten", pp.Dark.Original)
-	var cmdA_stdout bytes.Buffer
-	var cmdA_stderr bytes.Buffer
-	cmdA.Stdout = &cmdA_stdout
-	cmdA.Stderr = &cmdA_stderr
+	_, ppdoErr := os.Stat(pp.Dark.Original)
+	if os.IsNotExist(ppdoErr) {
+		// convert REPLACE_WITH_OUTPUT_PNG_PAGE_FILENAME -channel rgba -matte -fill 'rgba(250,226,203,1)' -fuzz 45% -opaque 'rgba(76,76,76,1)' -flatten REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME
+		cmdA := exec.Command(Binaries["convert"], pp.Light.Original, "-channel", "rgba", "-matte", "-fill", `rgba(250,226,203,1)`, "-fuzz", "45%", "-opaque", `rgba(76,76,76,1)`, "-flatten", pp.Dark.Original)
+		var cmdA_stdout bytes.Buffer
+		var cmdA_stderr bytes.Buffer
+		cmdA.Stdout = &cmdA_stdout
+		cmdA.Stderr = &cmdA_stderr
 
-	cmdA_err := cmdA.Run()
-	if cmdA_err != nil {
-		fmt.Printf("Failed to execute command: %s\n", cmdA_err)
-		return
+		cmdA_err := cmdA.Run()
+		if cmdA_err != nil {
+			log.Printf("failed to convert %v into %v due to error: %s\n", pp.Light.Original, pp.Dark.Original, cmdA_err)
+			return
+		}
+
+		// convert REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME -channel rgba -matte -fill 'rgba(40,40,86,1)' -fuzz 12% -opaque white -flatten REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME
+		cmdB := exec.Command(Binaries["convert"], pp.Dark.Original, `-channel`, `rgba`, `-matte`, `-fill`, `rgba(40,40,86,1)`, `-fuzz`, `12%`, `-opaque`, `white`, `-flatten`, pp.Dark.Original)
+		var cmdB_stdout bytes.Buffer
+		var cmdB_stderr bytes.Buffer
+		cmdB.Stdout = &cmdB_stdout
+		cmdB.Stderr = &cmdB_stderr
+
+		cmdB_err := cmdB.Run()
+		if cmdB_err != nil {
+			log.Printf("failed to convert %v into %v due to error: %s\n", pp.Light.Original, pp.Dark.Original, cmdB_err)
+			return
+		}
 	}
 
-	// convert REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME -channel rgba -matte -fill 'rgba(40,40,86,1)' -fuzz 12% -opaque white -flatten REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME
-	cmdB := exec.Command(Binaries["convert"], pp.Dark.Original, `-channel`, `rgba`, `-matte`, `-fill`, `rgba(40,40,86,1)`, `-fuzz`, `12%`, `-opaque`, `white`, `-flatten`, pp.Dark.Original)
-	var cmdB_stdout bytes.Buffer
-	var cmdB_stderr bytes.Buffer
-	cmdB.Stdout = &cmdB_stdout
-	cmdB.Stderr = &cmdB_stderr
-
-	cmdB_err := cmdB.Run()
-	if cmdB_err != nil {
-		fmt.Printf("Failed to execute command: %s\n", cmdB_err)
+	original, err := os.Open(pp.Dark.Original)
+	if err != nil {
+		log.Printf("failed to open pp.OriginalPath(%v) due to error %v", pp.Dark.Original, err)
 		return
 	}
 
 	// create the large thumbnail from the JPG
-	original, err := os.Open(pp.Dark.Original)
-	if err != nil {
-		log.Printf("failed to open pp.OriginalPath(%v) due to error %v", pp.Light.Original, err)
-		return
-	}
-	lgResizeErr := resizePng(original, 999, pp.Dark.Large)
-	if lgResizeErr != nil {
-		log.Printf("failed to resize jpg %v due to error %v", pp.Light.Large, lgResizeErr)
-		return
+	_, dlgErr := os.Stat(pp.Dark.Large)
+	if os.IsNotExist(dlgErr) {
+		lgResizeErr := resizePng(original, 999, pp.Dark.Large)
+		if lgResizeErr != nil {
+			log.Printf("failed to resize jpg %v due to error %v", pp.Dark.Large, lgResizeErr)
+			return
+		}
 	}
 
 	// create the medium thumbnail from the JPG
-	mdResizeErr := resizePng(original, 666, pp.Dark.Medium)
-	if mdResizeErr != nil {
-		log.Printf("failed to resize jpg %v due to error %v", pp.Light.Medium, mdResizeErr)
-		return
+	_, dmdErr := os.Stat(pp.Dark.Medium)
+	if os.IsNotExist(dmdErr) {
+		mdResizeErr := resizePng(original, 666, pp.Dark.Medium)
+		if mdResizeErr != nil {
+			log.Printf("failed to resize jpg %v due to error %v", pp.Dark.Medium, mdResizeErr)
+			return
+		}
 	}
 
 	// create the small thumbnail from the JPG
-	smResizeErr := resizePng(original, 333, pp.Dark.Small)
-	if smResizeErr != nil {
-		log.Printf("failed to resize jpg %v due to error %v", pp.Light.Small, smResizeErr)
-		return
+	_, dsmErr := os.Stat(pp.Dark.Small)
+	if os.IsNotExist(dsmErr) {
+		smResizeErr := resizePng(original, 333, pp.Dark.Small)
+		if smResizeErr != nil {
+			log.Printf("failed to resize jpg %v due to error %v", pp.Dark.Small, smResizeErr)
+			return
+		}
 	}
 
 }
@@ -329,21 +362,31 @@ func performOcrOnPdf(pp PendingPage) {
 	OCRSemaphore.Acquire()
 	log.Printf("running performOcrOnPdf(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 	defer OCRSemaphore.Release()
-	/*
-		tesseract REPLACE_WITH_FILE_PATH REPLACE_WITH_TEXT_OUTPUT_FILE_PATH -l eng --psm 1
-	*/
-	cmd8 := exec.Command(Binaries["tesseract"], filepath.Join(pp.PagesDir, pp.Light.Original), pp.OCRTextPath, `-l`, `eng`, `--psm`, `1`)
-	var cmd8_stdout bytes.Buffer
-	var cmd8_stderr bytes.Buffer
-	cmd8.Stdout = &cmd8_stdout
-	cmd8.Stderr = &cmd8_stderr
+	if ok, err := fileHasData(pp.OCRTextPath); !ok || err != nil {
+		/*
+			tesseract REPLACE_WITH_FILE_PATH REPLACE_WITH_TEXT_OUTPUT_FILE_PATH -l eng --psm 1
+		*/
+		img := filepath.Join(pp.PagesDir, pp.Light.Original)
+		ocrStat, ppOcrPathErr := os.Stat(pp.OCRTextPath)
+		if (ppOcrPathErr == nil || !os.IsNotExist(ppOcrPathErr)) && ocrStat.Size() > 0 {
+			ocrText, ocrTextErr := os.ReadFile(pp.OCRTextPath)
+			if ocrTextErr != nil && len(string(ocrText)) > 6 {
+				log.Printf("finished performOcrOnPdf(%v.%v) because the file %v already has %d bytes inside it!", pp.RecordIdentifier, pp.Identifier, pp.OCRTextPath, ocrStat.Size())
+				return
+			}
+		}
+		cmd8 := exec.Command(Binaries["tesseract"], img, pp.OCRTextPath, `-l`, `eng`, `--psm`, `1`)
+		var cmd8_stdout bytes.Buffer
+		var cmd8_stderr bytes.Buffer
+		cmd8.Stdout = &cmd8_stdout
+		cmd8.Stderr = &cmd8_stderr
 
-	cmd8_err := cmd8.Run()
-	if cmd8_err != nil {
-		log.Printf("Failed to execute command: %s\n", cmd8_err)
-		return
+		cmd8_err := cmd8.Run()
+		if cmd8_err != nil {
+			log.Printf("Command `tesseract %v %v -l eng --psm 1` failed with error: %s\n", img, pp.OCRTextPath, cmd8_err)
+			return
+		}
 	}
-
 }
 
 func convertPngToJpg(pp PendingPage) {
@@ -362,15 +405,20 @@ func convertPngToJpg(pp PendingPage) {
 			}
 			defer inputFile.Close()
 
-			err = convertAndOptimizePNG(inputFile, strings.TrimSuffix(path, filepath.Ext(path))+".jpg")
-			if err != nil {
-				return err
-			}
+			output := strings.TrimSuffix(path, filepath.Ext(path)) + ".jpg"
 
-			// Delete the PNG file
-			err = os.Remove(path)
-			if err != nil {
-				return err
+			_, oErr := os.Stat(output)
+			if os.IsNotExist(oErr) {
+				err = convertAndOptimizePNG(inputFile, output)
+				if err != nil {
+					return err
+				}
+
+				// Delete the PNG file
+				err = os.Remove(path)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -403,7 +451,7 @@ func convertPngToJpg(pp PendingPage) {
 			Social:   filepath.Join(pp.PagesDir, fmt.Sprintf("dark.%06d.social.jpg", pp.PageNumber)),
 		},
 	}
-	err = WritePendingPageToJson(pp, filepath.Join(pp.PagesDir, fmt.Sprintf("manifest.%v.%06d.json", pp.RecordIdentifier, pp.PageNumber)))
+	err = WritePendingPageToJson(pp, filepath.Join(pp.PagesDir, fmt.Sprintf("manifest.%06d.json", pp.PageNumber)))
 	if err != nil {
 		log.Printf("failed to overwrite the pp file for identifier %v due to error %v", pp.Identifier, err)
 		return

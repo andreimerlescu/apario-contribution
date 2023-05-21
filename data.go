@@ -29,14 +29,16 @@ var ch_PerformOcr = make(chan PendingPage, SemaLimiter)
 var ch_CompletedPage = make(chan PendingPage, SemaLimiter)
 
 type ResultData struct {
-	Identifier  string            `json:"identifier"`
-	URL         string            `json:"url"`
-	DataDir     string            `json:"data_dir"`
-	PDFPath     string            `json:"pdf_path"`
-	PDFChecksum string            `json:"pdf_checksum"`
-	OCRTextPath string            `json:"ocr_text_path"`
-	TotalPages  int               `json:"total_pages"`
-	Metadata    map[string]string `json:"metadata"`
+	Identifier        string            `json:"identifier"`
+	URL               string            `json:"url"`
+	DataDir           string            `json:"data_dir"`
+	PDFPath           string            `json:"pdf_path"`
+	PDFChecksum       string            `json:"pdf_checksum"`
+	OCRTextPath       string            `json:"ocr_text_path"`
+	ExtractedTextPath string            `json:"extracted_text_path"`
+	RecordPath        string            `json:"record_path"`
+	TotalPages        int               `json:"total_pages"`
+	Metadata          map[string]string `json:"metadata"`
 }
 
 type PendingPage struct {

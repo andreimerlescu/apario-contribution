@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -94,20 +93,22 @@ func processRecord(ctx context.Context, row []Column) error {
 	}
 
 	var (
-		q_filename_pdf  = filepath.Join(recordDir, strings.ReplaceAll(filename, `/`, `_`))
-		q_ocr_text_path = filepath.Join(recordDir, fmt.Sprintf("ocr.%v.txt", identifier))
+		q_file_pdf       = filepath.Join(recordDir, strings.ReplaceAll(filename, `/`, `_`))
+		q_file_ocr       = filepath.Join(recordDir, "ocr.txt")
+		q_file_extracted = filepath.Join(recordDir, "extracted.txt")
+		q_file_record    = filepath.Join(recordDir, "record.json")
 	)
 
-	_, downloadedPdfErr := os.Stat(q_filename_pdf)
+	_, downloadedPdfErr := os.Stat(q_file_pdf)
 	if os.IsNotExist(downloadedPdfErr) {
-		log.Printf("downloading URL %v to %v", pdf_url, q_filename_pdf)
-		err = downloadFile(ctx, pdf_url, q_filename_pdf)
+		log.Printf("downloading URL %v to %v", pdf_url, q_file_pdf)
+		err = downloadFile(ctx, pdf_url, q_file_pdf)
 		if err != nil {
 			return err
 		}
 	}
 
-	pdfFile, pdfFileErr := os.Open(q_filename_pdf)
+	pdfFile, pdfFileErr := os.Open(q_file_pdf)
 	if pdfFileErr != nil {
 		return pdfFileErr
 	}
@@ -143,16 +144,18 @@ func processRecord(ctx context.Context, row []Column) error {
 		metadata["collection"] = collection
 	}
 	rd := ResultData{
-		Identifier:  identifier,
-		URL:         pdf_url,
-		DataDir:     recordDir,
-		TotalPages:  totalPages,
-		PDFPath:     q_filename_pdf,
-		PDFChecksum: checksum,
-		OCRTextPath: q_ocr_text_path,
-		Metadata:    metadata,
+		Identifier:        identifier,
+		URL:               pdf_url,
+		DataDir:           recordDir,
+		TotalPages:        totalPages,
+		PDFChecksum:       checksum,
+		PDFPath:           q_file_pdf,
+		OCRTextPath:       q_file_ocr,
+		ExtractedTextPath: q_file_extracted,
+		RecordPath:        q_file_record,
+		Metadata:          metadata,
 	}
-	err = WriteResultDataToJson(rd, filepath.Join(recordDir, "record.json"))
+	err = WriteResultDataToJson(rd)
 	if err != nil {
 		return err
 	}

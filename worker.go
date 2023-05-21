@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -31,6 +32,32 @@ import (
 	"github.com/nfnt/resize"
 	"github.com/pixiv/go-libjpeg/jpeg"
 )
+
+func fileHasData(filename string) (bool, error) {
+	_, existsErr := os.Stat(filename)
+	if os.IsNotExist(existsErr) {
+		return false, fmt.Errorf("no such file")
+	}
+
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return false, err
+	}
+
+	contents := string(file)
+	if len(contents) < 20 {
+		regex := regexp.MustCompile("[^a-zA-Z0-9]+")
+		filtered := regex.ReplaceAllString(contents, "")
+		if len(filtered) > 3 {
+			return true, nil
+		} else {
+			return false, fmt.Errorf("invalid file contents length")
+		}
+	} else {
+		return true, nil
+	}
+
+}
 
 func parseDateString(in string) (out time.Time, err error) {
 	possibleFormats := []string{
@@ -514,8 +541,8 @@ func WritePendingPageToJson(pp PendingPage, outputPath string) error {
 	return nil
 }
 
-func WriteResultDataToJson(rd ResultData, outputPath string) error {
-	file, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+func WriteResultDataToJson(rd ResultData) error {
+	file, err := os.OpenFile(rd.RecordPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
