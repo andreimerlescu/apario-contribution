@@ -185,6 +185,29 @@ improve the performance of complex searching that will be offered in the desktop
 ...
 ```
 
+## Running on Docker
+
+If you wish to run this project purely within Docker and not rely on installing the required binaries directly to your
+system, or if you're on a system that doesn't natively support the binary dependencies, then Docker is your friend.
+
+### Build Docker Image
+
+The file is `Dockerfile` and it can be compiled using:
+
+```shell
+make dbuild
+```
+
+### Running Docker Container
+
+When running the docker container, you are required to supply the required argument `<filename>` in it, such as:
+
+```shell
+make drun jfk2023.xlsx
+```
+
+Inside the container, you're running as the user `apario` and not as `root`.
+
 ## Future Proves Past
 
 Project Apario was a monolithic Rails application that delivered the first 2 sets of the JFK Assassination Records to 
