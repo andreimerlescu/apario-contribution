@@ -1,3 +1,20 @@
+/*
+Project Apario is the World's Truth Repository that was invented and started by Andrei Merlescu in 2020.
+Copyright (C) 2023  Andrei Merlescu
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 package main
 
 import (
@@ -5,63 +22,66 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"image/color"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"syscall"
+	`text/tabwriter`
 	"time"
 )
 
-const maxAttempts = 33
-const charset = "ABCDEFGHKMNPQRSTUVWXYZ123456789"
-const ExecutePermissions = 0111
-
-var TotalPages = atomic.Int32{}
-var SemaLimiter int = 1         // 100K default
-var BufferSize int = 168 * 1024 // 128KB default
-var ThumbnailQualityScore = 90
-var backgroundColor = color.RGBA{R: 40, G: 40, B: 86, A: 255}
-var textColor = color.RGBA{R: 250, G: 226, B: 203, A: 255}
-var DataDir string
-var Cryptonyms map[string]string
-var IdentifierMu sync.RWMutex
-var UsedIdentifiers = map[string]bool{}
-var PWD string
-var Binaries = make(map[string]string)
-var RawBinaries = []string{
-	"pdfcpu",
-	"gs",
-	"pdftotext",
-	"convert",
-	"pdftoppm",
-	"tesseract",
-}
-var (
-	flag_b_sem_tesseract *int
-	flag_b_sem_download  *int
-	flag_b_sem_pdfcpu    *int
-	flag_b_sem_gs        *int
-	flag_b_sem_pdftotext *int
-	flag_b_sem_convert   *int
-	flag_b_sem_pdftoppm  *int
-	flag_g_sem_png2jpg   *int
-	flag_g_sem_resize    *int
-	flag_g_sem_shafile   *int
-	flag_g_sem_watermark *int
-	flag_g_sem_darkimage *int
-	flag_g_sem_filedata  *int
-	flag_g_sem_shastring *int
-	flag_g_sem_wjsonfile *int
-)
-
 func main() {
+	startedAt := time.Now().UTC()
 
-	binaryErr := verifyBinaries(RawBinaries)
+	flag.Usage = func() {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "./apario-contribution [FLAGS]")
+		fmt.Fprintln(w, "Flag\tDefault\tDescription")
+		nl, dl, ul := 4, 7, 11
+		out := ""
+		flag.VisitAll(func(f *flag.Flag) {
+			out += fmt.Sprintf("-%s\t%s\t%s\n", f.Name, f.DefValue, f.Usage)
+			if len(f.Name)+1 > nl {
+				nl = len(f.Name) + 1
+			}
+			if len(f.DefValue) > dl {
+				dl = len(f.DefValue)
+			}
+			if len(f.Usage) > ul {
+				ul = len(f.Usage)
+			}
+			fmt.Fprintf(w, "%v\t%v\t%v\n", strings.Repeat("-", nl), strings.Repeat("-", dl), strings.Repeat("-", ul))
+			fmt.Fprintln(w, out)
+		})
+		w.Flush()
+	}
+
+	for _, arg := range os.Args {
+		if arg == "help" {
+			flag.Usage()
+			os.Exit(0)
+		}
+		if arg == "show" {
+			for _, innerArg := range os.Args {
+				if innerArg == "w" || innerArg == "c" {
+					license, err := os.ReadFile(filepath.Join(".", "LICENSE"))
+					if err != nil {
+						fmt.Printf("Cannot find the license file to load to comply with the GNU-3 license terms. This program was modified outside of its intended runtime use.")
+						os.Exit(1)
+					} else {
+						fmt.Printf("%v\n", string(license))
+						os.Exit(1)
+					}
+				}
+			}
+		}
+	}
+
+	flag.Parse()
+
+	binaryErr := verifyBinaries(sl_required_binaries)
 	if binaryErr != nil {
 		fmt.Printf("Error: %s\n", binaryErr)
 		os.Exit(1)
@@ -72,61 +92,27 @@ func main() {
 		panic(execErr)
 	}
 
-	PWD = filepath.Dir(ex)
+	dir_current_directory = filepath.Dir(ex)
+	fmt.Sprintf("Current Working Directory: %s\n", dir_current_directory)
 
-	fmt.Println("Working Dir path: " + PWD)
-
-	startedAt := time.Now()
-	fileFlag := flag.String("file", "", "CSV file of URL + Metadata")
-	dirFlag := flag.String("dir", "", "Path of the directory you want the export to be generated into.")
-	semaphoreLimitFlag := flag.Int("limit", SemaLimiter, "Number of rows to concurrently process.")
-	fileBufferSize := flag.Int("buffer", BufferSize, "Memory allocation for CSV buffer (min 168 * 1024 = 168KB)")
-
-	flag_b_sem_tesseract = flag.Int("tesseract", 1, "Semaphore Limiter for `tesseract` binary.")
-	flag_b_sem_download = flag.Int("download", 2, "Semaphore Limiter for downloading PDF files from URLs.")
-	flag_b_sem_pdfcpu = flag.Int("pdfcpu", 17, "Semaphore Limiter for `pdfcpu` binary.")
-	flag_b_sem_gs = flag.Int("gs", 17, "Semaphore Limiter for `gs` binary.")
-	flag_b_sem_pdftotext = flag.Int("pdftotext", 17, "Semaphore Limiter for `pdftotext` binary.")
-	flag_b_sem_convert = flag.Int("convert", 17, "Semaphore Limiter for `convert` binary.")
-	flag_b_sem_pdftoppm = flag.Int("pdftoppm", 17, "Semaphore Limiter for `pdftoppm` binary.")
-	flag_g_sem_png2jpg = flag.Int("png2jpg", 17, "Semaphore Limiter for converting PNG images to JPG.")
-	flag_g_sem_resize = flag.Int("resize", 17, "Semaphore Limiter for resize PNG or JPG images.")
-	flag_g_sem_shafile = flag.Int("shafile", 36, "Semaphore Limiter for calculating the SHA256 checksum of files.")
-	flag_g_sem_watermark = flag.Int("watermark", 36, "Semaphore Limiter for adding a watermark to an image.")
-	flag_g_sem_darkimage = flag.Int("darkimage", 36, "Semaphore Limiter for converting an image to dark mode.")
-	flag_g_sem_filedata = flag.Int("filedata", 369, "Semaphore Limiter for writing metadata about a processed file to JSON.")
-	flag_g_sem_shastring = flag.Int("shastring", 369, "Semaphore Limiter for calculating the SHA256 checksum of a string.")
-	flag_g_sem_wjsonfile = flag.Int("wjsonfile", 369, "Semaphore Limiter for writing a JSON file to disk.")
-
-	flag.Usage = func() {
-		_, err := fmt.Fprintf(os.Stderr, "Usage: %s -file FILE -output-dir DIRECTORY [ -limit INT | -buffer INT ]\n", os.Args[0])
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
-
-	if *fileFlag == "" || *dirFlag == "" {
+	if *flag_s_file == "" || *flag_s_directory == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	if *semaphoreLimitFlag > 0 {
-		SemaLimiter = *semaphoreLimitFlag
+	if *flag_i_sem_limiter > 0 {
+		channel_buffer_size = *flag_i_sem_limiter
 	}
 
-	if *fileBufferSize > 0 {
-		BufferSize = *fileBufferSize
+	if *flag_i_buffer > 0 {
+		reader_buffer_bytes = *flag_i_buffer
 	}
 
-	if len(*dirFlag) > 0 {
-		DataDir = filepath.Join(".", *dirFlag)
-		fmt.Println("Tmp path: " + DataDir)
-		if !IsDir(DataDir) {
-			panic(fmt.Sprintf("FATAL ERROR: %v is not a directory and cannot be used for saving content...", *dirFlag))
+	if len(*flag_s_directory) > 0 {
+		dir_data_directory = filepath.Join(".", *flag_s_directory)
+		fmt.Println("Tmp path: " + dir_data_directory)
+		if !IsDir(dir_data_directory) {
+			panic(fmt.Sprintf("FATAL ERROR: %v is not a directory and cannot be used for saving content...", *flag_s_directory))
 		}
 	} else {
 		panic("-dir is a required flag to run this program")
@@ -152,37 +138,47 @@ func main() {
 		os.Exit(1)
 	}()
 
+	a_b_dictionary_loaded.Store(false)
+	go populateDictionary()
+
 	cryptonymFile, cryptonymFileErr := os.ReadFile(filepath.Join(".", "importable", "cryptonyms.json"))
 	if cryptonymFileErr != nil {
 		log.Printf("failed to parse cryptonyms.json file from the data directory due to error: %v", cryptonymFileErr)
 	} else {
-		cryptonymMarshalErr := json.Unmarshal(cryptonymFile, &Cryptonyms)
+		cryptonymMarshalErr := json.Unmarshal(cryptonymFile, &m_cryptonyms)
 		if cryptonymMarshalErr != nil {
-			log.Printf("failed to load the Cryptonyms due to error %v", cryptonymMarshalErr)
+			log.Printf("failed to load the m_cryptonyms due to error %v", cryptonymMarshalErr)
 		}
-		//log.Printf("Cryptonyms generated as: %v", Cryptonyms)
+		//log.Printf("m_cryptonyms generated as: %v", m_cryptonyms)
 	}
 
 	var (
 		err error
-		ctx = context.WithValue(context.Background(), "filename", *fileFlag)
+		ctx = context.WithValue(context.Background(), CtxKey("filename"), *flag_s_file)
 	)
 
-	go receiveImportedRow(ctx, ch_ImportedRow)         // runs validatePdf before sending into ch_ExtractText
-	go receiveOnExtractTextCh(ctx, ch_ExtractText)     // runs extractPlainTextFromPdf before sending into ch_ExtractPages
-	go receiveOnExtractPagesCh(ctx, ch_ExtractPages)   // runs extractPagesFromPdf before sending PendingPage into ch_GeneratePng
-	go receiveOnGeneratePngCh(ctx, ch_GeneratePng)     // runs convertPageToPng before sending PendingPage into ch_GenerateLight
-	go receiveOnGenerateLightCh(ctx, ch_GenerateLight) // runs generateLightThumbnails before sending PendingPage into ch_GenerateDark
-	go receiveOnGenerateDarkCh(ctx, ch_GenerateDark)   // runs generateDarkThumbnails before sending PendingPage into ch_ConvertToJpg
-	go receiveOnConvertToJpg(ctx, ch_ConvertToJpg)     // runs convertPngToJpg before sending PendingPage into ch_PerformOcr
-	go receiveOnPerformOcrCh(ctx, ch_PerformOcr)       // runs performOcrOnPdf before sending PendingPage into ch_CompletedPage
+	go receiveImportedRow(ctx, ch_ImportedRow)             // step 01 - runs validatePdf before sending into ch_ExtractText
+	go receiveOnExtractTextCh(ctx, ch_ExtractText)         // step 02 - runs extractPlainTextFromPdf before sending into ch_ExtractPages
+	go receiveOnExtractPagesCh(ctx, ch_ExtractPages)       // step 03 - runs extractPagesFromPdf before sending PendingPage into ch_GeneratePng
+	go receiveOnGeneratePngCh(ctx, ch_GeneratePng)         // step 04 - runs convertPageToPng before sending PendingPage into ch_GenerateLight
+	go receiveOnGenerateLightCh(ctx, ch_GenerateLight)     // step 05 - runs generateLightThumbnails before sending PendingPage into ch_GenerateDark
+	go receiveOnGenerateDarkCh(ctx, ch_GenerateDark)       // step 06 - runs generateDarkThumbnails before sending PendingPage into ch_ConvertToJpg
+	go receiveOnConvertToJpg(ctx, ch_ConvertToJpg)         // step 07 - runs convertPngToJpg before sending PendingPage into ch_PerformOcr
+	go receiveOnPerformOcrCh(ctx, ch_PerformOcr)           // step 08 - runs performOcrOnPdf before sending PendingPage into ch_AnalyzeText
+	go receiveFullTextToAnalyze(ctx, ch_AnalyzeText)       // step 09 - runs analyze_StartOnFullText before sending PendingPage into ch_AnalyzeCryptonyms
+	go receiveAnalyzeCryptonym(ctx, ch_AnalyzeCryptonyms)  // step 10 - runs analyzeCryptonyms before sending PendingPage into ch_AnalyzeLocations
+	go receiveAnalyzeLocations(ctx, ch_AnalyzeLocations)   // step 11 - runs analyzeLocations before sending PendingPage into ch_AnalyzeGematria
+	go receiveAnalyzeGematria(ctx, ch_AnalyzeGematria)     // step 12 - runs analyzeGematria before sending PendingPage into ch_AnalyzeDictionary
+	go receiveAnalyzeDictionary(ctx, ch_AnalyzeDictionary) // step 13 - runs analyzeWordIndexer before sending PendingPage into ch_CompletedPage
+	go receiveCompletedPendingPage(ctx, ch_CompletedPage)  // step 14 - compiles a final result of a Document before sending it into ch_CompiledDocument
+	go receiveCompiledDocument(ctx, ch_CompiledDocument)   // step 15 - compiles the SQL insert statements for the Document
 
-	if strings.Contains(*fileFlag, ".csv") || strings.Contains(*fileFlag, ".psv") {
-		err = loadCsv(ctx, *fileFlag, processRecord) // parse the file
-	} else if strings.Contains(*fileFlag, ".xlsx") {
-		err = loadXlsx(ctx, *fileFlag, processRecord) // parse the file
+	if strings.Contains(*flag_s_file, ".csv") || strings.Contains(*flag_s_file, ".psv") {
+		err = loadCsv(ctx, *flag_s_file, processRecord) // parse the file
+	} else if strings.Contains(*flag_s_file, ".xlsx") {
+		err = loadXlsx(ctx, *flag_s_file, processRecord) // parse the file
 	} else {
-		panic(fmt.Sprintf("unable to parse file %v", *fileFlag))
+		panic(fmt.Sprintf("unable to parse file %v", *flag_s_file))
 	}
 
 	if err != nil {
@@ -192,17 +188,22 @@ func main() {
 	defer logFile.Close()
 
 	go func() {
-		PerformingWork.Wait()
-		close(ch_ImportedRow)   // step 0
-		close(ch_ExtractText)   // step 1
-		close(ch_ExtractPages)  // step 2
-		close(ch_GeneratePng)   // step 3
-		close(ch_GenerateLight) // step 4
-		close(ch_GenerateDark)  // step 5
-		close(ch_ConvertToJpg)  // step 6
-		close(ch_PerformOcr)    // step 7
-		close(ch_CompletedPage) // step 8
-		ch_Done <- struct{}{}
+		wg_active_tasks.Wait()
+		close(ch_ImportedRow)       // step 01
+		close(ch_ExtractText)       // step 02
+		close(ch_ExtractPages)      // step 03
+		close(ch_GeneratePng)       // step 04
+		close(ch_GenerateLight)     // step 05
+		close(ch_GenerateDark)      // step 06
+		close(ch_ConvertToJpg)      // step 07
+		close(ch_PerformOcr)        // step 08
+		close(ch_AnalyzeText)       // step 09
+		close(ch_AnalyzeCryptonyms) // step 10
+		close(ch_AnalyzeLocations)  // step 11
+		close(ch_AnalyzeGematria)   // step 12
+		close(ch_AnalyzeDictionary) // step 13
+		close(ch_CompletedPage)     // step 14
+		ch_Done <- struct{}{}       // step 15
 	}()
 
 	for {

@@ -1,7 +1,25 @@
+/*
+Project Apario is the World's Truth Repository that was invented and started by Andrei Merlescu in 2020.
+Copyright (C) 2023  Andrei Merlescu
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 package main
 
 import (
 	"bytes"
+	`context`
 	"fmt"
 	"log"
 	"os"
@@ -11,9 +29,9 @@ import (
 	"strings"
 )
 
-func validatePdf(record ResultData) (ResultData, error) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func validatePdf(ctx context.Context, record ResultData) (ResultData, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	log.Printf("started validatePdf(%v) = %v", record.Identifier, record.PDFPath)
 
 	_, rjsonErr := os.Stat(record.RecordPath)
@@ -21,14 +39,14 @@ func validatePdf(record ResultData) (ResultData, error) {
 		/*
 			pdfcpu validate REPLACE_WITH_FILE_PATH | grep 'validation ok'
 		*/
-		cmd0_validate_pdf := exec.Command(Binaries["pdfcpu"], "validate", record.PDFPath)
+		cmd0_validate_pdf := exec.Command(m_required_binaries["pdfcpu"], "validate", record.PDFPath)
 		var cmd0_validate_pdf_stdout bytes.Buffer
 		var cmd0_validate_pdf_stderr bytes.Buffer
 		cmd0_validate_pdf.Stdout = &cmd0_validate_pdf_stdout
 		cmd0_validate_pdf.Stderr = &cmd0_validate_pdf_stderr
-		b_sem_pdfcpu.Acquire()
+		sem_pdfcpu.Acquire()
 		cmd0_validate_pdf_err := cmd0_validate_pdf.Run()
-		b_sem_pdfcpu.Release()
+		sem_pdfcpu.Release()
 
 		if cmd0_validate_pdf_err != nil {
 			return record, fmt.Errorf("Failed to execute `pdfcpu validate %v` due to error: %s\n", record.PDFPath, cmd0_validate_pdf_err)
@@ -40,14 +58,14 @@ func validatePdf(record ResultData) (ResultData, error) {
 		/*
 			gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o REPLACE_WITH_FILE_PATH REPLACE_WITH_FILE_PATH
 		*/
-		cmd1_convert_pdf := exec.Command(Binaries["gs"], "-q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o", record.PDFPath, record.PDFPath)
+		cmd1_convert_pdf := exec.Command(m_required_binaries["gs"], "-q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o", record.PDFPath, record.PDFPath)
 		var cmd1_convert_pdf_stdout bytes.Buffer
 		var cmd1_convert_pdf_stderr bytes.Buffer
 		cmd1_convert_pdf.Stdout = &cmd1_convert_pdf_stdout
 		cmd1_convert_pdf.Stderr = &cmd1_convert_pdf_stderr
-		b_sem_gs.Acquire()
+		sem_gs.Acquire()
 		cmd1_convert_pdf_err := cmd1_convert_pdf.Run()
-		b_sem_gs.Release()
+		sem_gs.Release()
 		if cmd1_convert_pdf_err != nil {
 			return record, fmt.Errorf("Failed to execute command `gs -q -sDEVICE=pdfwrite -dCompatibilityLevel=1.7 -o %v %v` due to error: %s\n", record.PDFPath, record.PDFPath, cmd1_convert_pdf_err)
 		}
@@ -55,14 +73,14 @@ func validatePdf(record ResultData) (ResultData, error) {
 		/*
 			pdfcpu optimize REPLACE_WITH_FILE_PATH
 		*/
-		cmd2_optimize_pdf := exec.Command(Binaries["pdfcpu"], "optimize", record.PDFPath)
+		cmd2_optimize_pdf := exec.Command(m_required_binaries["pdfcpu"], "optimize", record.PDFPath)
 		var cmd2_optimize_pdf_stdout bytes.Buffer
 		var cmd2_optimize_pdf_stderr bytes.Buffer
 		cmd2_optimize_pdf.Stdout = &cmd2_optimize_pdf_stdout
 		cmd2_optimize_pdf.Stderr = &cmd2_optimize_pdf_stderr
-		b_sem_pdfcpu.Acquire()
+		sem_pdfcpu.Acquire()
 		cmd2_optimize_pdf_err := cmd2_optimize_pdf.Run()
-		b_sem_pdfcpu.Release()
+		sem_pdfcpu.Release()
 		if cmd2_optimize_pdf_err != nil {
 			return record, fmt.Errorf("Failed to execute command `pdfcpu optimize %v` due to error: %s\n", record.PDFPath, cmd2_optimize_pdf_err)
 		}
@@ -71,9 +89,9 @@ func validatePdf(record ResultData) (ResultData, error) {
 	return record, nil
 }
 
-func extractPlainTextFromPdf(record ResultData) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func extractPlainTextFromPdf(ctx context.Context, record ResultData) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("finished extracting the text from the PDF %v, now sending rd into ch_ExtractPages", filepath.Base(record.PDFPath))
 		ch_ExtractPages <- record
@@ -83,14 +101,14 @@ func extractPlainTextFromPdf(record ResultData) {
 		/*
 			pdftotext REPLACE_WITH_FILE_PATH REPLACE_WITH_TEXT_OUTPUT_FILE_PATH
 		*/
-		cmd4_extract_text_pdf := exec.Command(Binaries["pdftotext"], record.PDFPath, record.ExtractedTextPath)
+		cmd4_extract_text_pdf := exec.Command(m_required_binaries["pdftotext"], record.PDFPath, record.ExtractedTextPath)
 		var cmd4_extract_text_pdf_stdout bytes.Buffer
 		var cmd4_extract_text_pdf_stderr bytes.Buffer
 		cmd4_extract_text_pdf.Stdout = &cmd4_extract_text_pdf_stdout
 		cmd4_extract_text_pdf.Stderr = &cmd4_extract_text_pdf_stderr
-		b_sem_pdftotext.Acquire()
+		sem_pdftotext.Acquire()
 		cmd4_extract_text_pdf_err := cmd4_extract_text_pdf.Run()
-		b_sem_pdftotext.Release()
+		sem_pdftotext.Release()
 		if cmd4_extract_text_pdf_err != nil {
 			log.Printf("Failed to execute command `pdftotext %v %v` due to error: %s\n", record.PDFPath, record.ExtractedTextPath, cmd4_extract_text_pdf_err)
 			return
@@ -98,15 +116,15 @@ func extractPlainTextFromPdf(record ResultData) {
 	}
 }
 
-func extractPagesFromPdf(record ResultData) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func extractPagesFromPdf(ctx context.Context, record ResultData) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	log.Printf("started extractPagesFromPdf(%v) = %v", record.Identifier, record.PDFPath)
 	/*
 		pdfcpu extract -mode page REPLACE_WITH_FILE_PATH REPLACE_WITH_OUTPUT_DIRECTORY
 	*/
 	pagesDir := filepath.Join(record.DataDir, "pages")
-	TempDirs.Store(record.Identifier, pagesDir)
+	sm_page_directories.Store(record.Identifier, pagesDir)
 	_, pagesDirExistsErr := os.Stat(pagesDir)
 	performPagesExtract := false
 	if os.IsNotExist(pagesDirExistsErr) {
@@ -123,14 +141,14 @@ func extractPagesFromPdf(record ResultData) {
 			log.Printf("failed to create directory %v due to error %v", pagesDir, pagesDirErr)
 			return
 		}
-		cmd5_extract_pages_in_pdf := exec.Command(Binaries["pdfcpu"], "extract", "-mode", "page", record.PDFPath, pagesDir)
+		cmd5_extract_pages_in_pdf := exec.Command(m_required_binaries["pdfcpu"], "extract", "-mode", "page", record.PDFPath, pagesDir)
 		var cmd5_extract_pages_in_pdf_stdout bytes.Buffer
 		var cmd5_extract_pages_in_pdf_stderr bytes.Buffer
 		cmd5_extract_pages_in_pdf.Stdout = &cmd5_extract_pages_in_pdf_stdout
 		cmd5_extract_pages_in_pdf.Stderr = &cmd5_extract_pages_in_pdf_stderr
-		b_sem_pdfcpu.Acquire()
+		sem_pdfcpu.Acquire()
 		cmd5_extract_pages_in_pdf_err := cmd5_extract_pages_in_pdf.Run()
-		b_sem_pdfcpu.Release()
+		sem_pdfcpu.Release()
 		if cmd5_extract_pages_in_pdf_err != nil {
 			log.Printf("Failed to execute command `pdfcpu extract -mode page %v %v` due to error: %s\n", record.PDFPath, pagesDir, cmd5_extract_pages_in_pdf_err)
 			return
@@ -178,6 +196,7 @@ func extractPagesFromPdf(record ResultData) {
 					Social:   filepath.Join(pagesDir, fmt.Sprintf("page.dark.%06d.social.png", pgNo)),
 				},
 			}
+			sm_pages.Store(pp.Identifier, pp)
 			err := WritePendingPageToJson(pp, filepath.Join(pagesDir, fmt.Sprintf("manifest.%06d.json", pgNo)))
 			if err != nil {
 				return err
@@ -197,9 +216,9 @@ func extractPagesFromPdf(record ResultData) {
 	return
 }
 
-func convertPageToPng(pp PendingPage) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func convertPageToPng(ctx context.Context, pp PendingPage) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	log.Printf("started convertPageToPng(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 	/*
 		pdf_to_png: "pdftoppm REPLACE_WITH_PNG_OPTS REPLACE_WITH_FILE_PATH REPLACE_WITH_PNG_PATH",
@@ -207,16 +226,16 @@ func convertPageToPng(pp PendingPage) {
 	_, loErr := os.Stat(pp.Light.Original)
 	if os.IsNotExist(loErr) {
 		originalFilename := strings.ReplaceAll(pp.Light.Original, `.png`, ``)
-		cmd := exec.Command(Binaries["pdftoppm"],
+		cmd := exec.Command(m_required_binaries["pdftoppm"],
 			`-r`, `369`, `-png`, `-freetype`, `yes`, `-aa`, `yes`, `-aaVector`, `yes`, `-thinlinemode`, `solid`,
 			pp.PDFPath, originalFilename)
 		var cmd_stdout bytes.Buffer
 		var cmd_stderr bytes.Buffer
 		cmd.Stdout = &cmd_stdout
 		cmd.Stderr = &cmd_stderr
-		b_sem_pdftoppm.Acquire()
+		sem_pdftoppm.Acquire()
 		cmd_err := cmd.Run()
-		b_sem_pdftoppm.Release()
+		sem_pdftoppm.Release()
 		if cmd_err != nil {
 			log.Printf("failed to convert page %v to png %v due to error: %s\n", filepath.Base(pp.PDFPath), pp.Light.Original, cmd_err)
 			return
@@ -234,9 +253,9 @@ func convertPageToPng(pp PendingPage) {
 	return
 }
 
-func generateLightThumbnails(pp PendingPage) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func generateLightThumbnails(ctx context.Context, pp PendingPage) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed generateLightThumbnails now sending %v (%v.%v) -> ch_GenerateDark ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
 		ch_GenerateDark <- pp
@@ -280,9 +299,9 @@ func generateLightThumbnails(pp PendingPage) {
 
 }
 
-func generateDarkThumbnails(pp PendingPage) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func generateDarkThumbnails(ctx context.Context, pp PendingPage) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed generateDarkThumbnails now sending %v (%v.%v) -> ch_PerformOcr ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
 		ch_PerformOcr <- pp
@@ -293,28 +312,28 @@ func generateDarkThumbnails(pp PendingPage) {
 	_, ppdoErr := os.Stat(pp.Dark.Original)
 	if os.IsNotExist(ppdoErr) {
 		// convert REPLACE_WITH_OUTPUT_PNG_PAGE_FILENAME -channel rgba -matte -fill 'rgba(250,226,203,1)' -fuzz 45% -opaque 'rgba(76,76,76,1)' -flatten REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME
-		cmdA := exec.Command(Binaries["convert"], pp.Light.Original, "-channel", "rgba", "-matte", "-fill", `rgba(250,226,203,1)`, "-fuzz", "45%", "-opaque", `rgba(76,76,76,1)`, "-flatten", pp.Dark.Original)
+		cmdA := exec.Command(m_required_binaries["convert"], pp.Light.Original, "-channel", "rgba", "-matte", "-fill", `rgba(250,226,203,1)`, "-fuzz", "45%", "-opaque", `rgba(76,76,76,1)`, "-flatten", pp.Dark.Original)
 		var cmdA_stdout bytes.Buffer
 		var cmdA_stderr bytes.Buffer
 		cmdA.Stdout = &cmdA_stdout
 		cmdA.Stderr = &cmdA_stderr
-		b_sem_convert.Acquire()
+		sem_convert.Acquire()
 		cmdA_err := cmdA.Run()
-		b_sem_convert.Release()
+		sem_convert.Release()
 		if cmdA_err != nil {
 			log.Printf("failed to convert %v into %v due to error: %s\n", pp.Light.Original, pp.Dark.Original, cmdA_err)
 			return
 		}
 
 		// convert REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME -channel rgba -matte -fill 'rgba(40,40,86,1)' -fuzz 12% -opaque white -flatten REPLACE_WITH_OUTPUT_PNG_DARK_PAGE_FILENAME
-		cmdB := exec.Command(Binaries["convert"], pp.Dark.Original, `-channel`, `rgba`, `-matte`, `-fill`, `rgba(40,40,86,1)`, `-fuzz`, `12%`, `-opaque`, `white`, `-flatten`, pp.Dark.Original)
+		cmdB := exec.Command(m_required_binaries["convert"], pp.Dark.Original, `-channel`, `rgba`, `-matte`, `-fill`, `rgba(40,40,86,1)`, `-fuzz`, `12%`, `-opaque`, `white`, `-flatten`, pp.Dark.Original)
 		var cmdB_stdout bytes.Buffer
 		var cmdB_stderr bytes.Buffer
 		cmdB.Stdout = &cmdB_stdout
 		cmdB.Stderr = &cmdB_stderr
-		b_sem_convert.Acquire()
+		sem_convert.Acquire()
 		cmdB_err := cmdB.Run()
-		b_sem_convert.Release()
+		sem_convert.Release()
 		if cmdB_err != nil {
 			log.Printf("failed to convert %v into %v due to error: %s\n", pp.Light.Original, pp.Dark.Original, cmdB_err)
 			return
@@ -359,9 +378,9 @@ func generateDarkThumbnails(pp PendingPage) {
 
 }
 
-func performOcrOnPdf(pp PendingPage) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func performOcrOnPdf(ctx context.Context, pp PendingPage) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed performOcrOnPdf now sending %v (%v.%v) -> ch_ConvertToJpg ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
 		ch_ConvertToJpg <- pp
@@ -380,16 +399,16 @@ func performOcrOnPdf(pp PendingPage) {
 				return
 			}
 		}
-		cmd8 := exec.Command(Binaries["tesseract"], img, pp.OCRTextPath, `-l`, `eng`, `--psm`, `1`)
+		cmd8 := exec.Command(m_required_binaries["tesseract"], img, pp.OCRTextPath, `-l`, `eng`, `--psm`, `1`)
 		var cmd8_stdout bytes.Buffer
 		var cmd8_stderr bytes.Buffer
 		cmd8.Stdout = &cmd8_stdout
 		cmd8.Stderr = &cmd8_stderr
 		log.Printf("started performOcrOnPdf(%v.%v) = %v (WAITING)", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
-		b_sem_tesseract.Acquire()
+		sem_tesseract.Acquire()
 		log.Printf("running performOcrOnPdf(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 		cmd8_err := cmd8.Run()
-		b_sem_tesseract.Release()
+		sem_tesseract.Release()
 		log.Printf("completed performOcrOnPdf(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 		if cmd8_err != nil {
 			log.Printf("Command `tesseract %v %v -l eng --psm 1` failed with error: %s\n", img, pp.OCRTextPath, cmd8_err)
@@ -398,9 +417,9 @@ func performOcrOnPdf(pp PendingPage) {
 	}
 }
 
-func convertPngToJpg(pp PendingPage) {
-	PerformingWork.Add(1)
-	defer PerformingWork.Done()
+func convertPngToJpg(ctx context.Context, pp PendingPage) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	log.Printf("started convertPngToJpg(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 	err := filepath.Walk(pp.PagesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -460,6 +479,7 @@ func convertPngToJpg(pp PendingPage) {
 			Social:   filepath.Join(pp.PagesDir, fmt.Sprintf("dark.%06d.social.jpg", pp.PageNumber)),
 		},
 	}
+	sm_pages.Store(pp.Identifier, pp)
 	err = WritePendingPageToJson(pp, filepath.Join(pp.PagesDir, fmt.Sprintf("manifest.%06d.json", pp.PageNumber)))
 	if err != nil {
 		log.Printf("failed to overwrite the pp file for identifier %v due to error %v", pp.Identifier, err)

@@ -1,7 +1,25 @@
+/*
+Project Apario is the World's Truth Repository that was invented and started by Andrei Merlescu in 2020.
+Copyright (C) 2023  Andrei Merlescu
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 package main
 
 import (
 	"context"
+	`fmt`
 	"log"
 	"os"
 	"path/filepath"
@@ -14,7 +32,10 @@ const jfk_pdf_download_prefix = "https://www.archives.gov/files/research/jfk/rel
 
 func processRecord(ctx context.Context, row []Column) error {
 	log.Printf("processRecord received for row %v", row)
-	totalPages := 0
+
+	loadedFile := fmt.Sprintf("%s", ctx.Value(CtxKey("filename")))
+
+	var totalPages int64 = 0
 	var filename, title, collection, pdf_url, source_url, comments, record_number, to_name, from_name, agency string
 	var creation_date, release_date time.Time
 
@@ -61,13 +82,13 @@ func processRecord(ctx context.Context, row []Column) error {
 		case "page_count", "Num Pages", "Original Document Pages":
 			pg, err := strconv.Atoi(r.Value)
 			if err == nil {
-				totalPages += pg
+				totalPages += int64(pg)
 			}
 		}
 	}
-	TotalPages.Add(int32(totalPages))
+	a_i_total_pages.Add(totalPages)
 
-	if !strings.HasPrefix(pdf_url, "http") {
+	if !strings.HasPrefix(pdf_url, "http") && strings.Contains(loadedFile, "jfk") {
 		pdf_url = jfk_pdf_download_prefix + filename
 		log.Printf("pdf_url = %v", pdf_url)
 	}
@@ -86,7 +107,7 @@ func processRecord(ctx context.Context, row []Column) error {
 
 	identifier := NewIdentifier(6)
 
-	recordDir := filepath.Join(DataDir, pdf_url_checksum)
+	recordDir := filepath.Join(dir_data_directory, pdf_url_checksum)
 	err := os.MkdirAll(recordDir, 0750)
 	if err != nil {
 		return err
@@ -159,7 +180,7 @@ func processRecord(ctx context.Context, row []Column) error {
 	if err != nil {
 		return err
 	}
-	db_documents.Store(identifier, rd)
+	sm_documents.Store(identifier, rd)
 	log.Printf("sending URL %v (rd struct) into the ch_ImportedRow channel", rd.URL)
 	ch_ImportedRow <- rd
 	return nil

@@ -98,27 +98,27 @@ it'll regenerate the manifest files, thumbnails, and re-perform the OCR on the p
 
 ### Command Line Arguments
 
-| Flag         | Default   | Notes                                                                  |
-|--------------|-----------|------------------------------------------------------------------------|
-| `-file`      | __blank__ | CSV file of URL + Metadata.                                            | 
-| `-dir`       | __blank__ | Path of the directory you want the export to be generated into.        | 
-| `-limit`     | `1`       | Number of rows to concurrently process.                                | 
-| `-buffer`    | `172032`  | Memory allocation for CSV buffer (min 168 * 1024 = 168KB)              | 
-| `-tesseract` | `1`       | Semaphore Limiter for `tesseract` binary.                              | 
-| `-download`  | `2`       | Semaphore Limiter for downloading PDF files from URLs.                 | 
-| `-pdfcpu`    | `17`      | Semaphore Limiter for `pdfcpu` binary.                                 | 
-| `-gs`        | `17`      | Semaphore Limiter for `gs` binary.                                     | 
-| `-pdftotext` | `17`      | Semaphore Limiter for `pdftotext` binary.                              | 
-| `-convert`   | `17`      | Semaphore Limiter for `convert` binary.                                | 
-| `-pdftoppm`  | `17`      | Semaphore Limiter for `pdftoppm` binary.                               | 
-| `-png2jpg`   | `17`      | Semaphore Limiter for converting PNG images to JPG.                    | 
-| `-resize`    | `17`      | Semaphore Limiter for resize PNG or JPG images.                        | 
-| `-shafile`   | `36`      | Semaphore Limiter for calculating the SHA256 checksum of files.        | 
-| `-watermark` | `36`      | Semaphore Limiter for adding a watermark to an image.                  | 
-| `-darkimage` | `36`      | Semaphore Limiter for converting an image to dark mode.                | 
-| `-filedata`  | `369`     | Semaphore Limiter for writing metadata about a processed file to JSON. | 
-| `-shastring` | `369`     | Semaphore Limiter for calculating the SHA256 checksum of a string.     | 
-| `-wjsonfile` | `369`     | Semaphore Limiter for writing a JSON file to disk.                     | 
+| Flag         | Default   | Notes                                                                   |
+|--------------|-----------|-------------------------------------------------------------------------|
+| `-file`      | __blank__ | CSV file of URL + Metadata.                                             | 
+| `-dir`       | __blank__ | Path of the directory you want the export to be generated into.         | 
+| `-limit`     | `1`       | Number of rows to concurrently process.                                 | 
+| `-buffer`    | `131072`  | Memory allocation for CSV, XLSX, or PSV buffer (min 128 * 1024 = 168KB) | 
+| `-tesseract` | `1`       | Semaphore Limiter for `tesseract` binary.                               | 
+| `-download`  | `2`       | Semaphore Limiter for downloading PDF files from URLs.                  | 
+| `-pdfcpu`    | `17`      | Semaphore Limiter for `pdfcpu` binary.                                  | 
+| `-gs`        | `17`      | Semaphore Limiter for `gs` binary.                                      | 
+| `-pdftotext` | `17`      | Semaphore Limiter for `pdftotext` binary.                               | 
+| `-convert`   | `17`      | Semaphore Limiter for `convert` binary.                                 | 
+| `-pdftoppm`  | `17`      | Semaphore Limiter for `pdftoppm` binary.                                | 
+| `-png2jpg`   | `17`      | Semaphore Limiter for converting PNG images to JPG.                     | 
+| `-resize`    | `17`      | Semaphore Limiter for resize PNG or JPG images.                         | 
+| `-shafile`   | `36`      | Semaphore Limiter for calculating the SHA256 checksum of files.         | 
+| `-watermark` | `36`      | Semaphore Limiter for adding a watermark to an image.                   | 
+| `-darkimage` | `36`      | Semaphore Limiter for converting an image to dark mode.                 | 
+| `-filedata`  | `369`     | Semaphore Limiter for writing metadata about a processed file to JSON.  | 
+| `-shastring` | `369`     | Semaphore Limiter for calculating the SHA256 checksum of a string.      | 
+| `-wjsonfile` | `369`     | Semaphore Limiter for writing a JSON file to disk.                      | 
 
 ## Output
 

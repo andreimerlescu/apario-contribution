@@ -1,6 +1,24 @@
+/*
+Project Apario is the World's Truth Repository that was invented and started by Andrei Merlescu in 2020.
+Copyright (C) 2023  Andrei Merlescu
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 package main
 
 import (
+	`bufio`
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -16,12 +34,14 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	`io/fs`
 	"log"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	`path/filepath`
 	"regexp"
 	"runtime"
 	"sort"
@@ -34,8 +54,8 @@ import (
 )
 
 func fileHasData(filename string) (bool, error) {
-	g_sem_filedata.Acquire()
-	defer g_sem_filedata.Release()
+	sem_filedata.Acquire()
+	defer sem_filedata.Release()
 	_, existsErr := os.Stat(filename)
 	if os.IsNotExist(existsErr) {
 		return false, fmt.Errorf("no such file")
@@ -150,8 +170,8 @@ func IsDir(in string) bool {
 }
 
 func FileSha512(file *os.File) (checksum string) {
-	g_sem_shafile.Acquire()
-	defer g_sem_shafile.Release()
+	sem_shafile.Acquire()
+	defer sem_shafile.Release()
 	hash := sha512.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		panic(err)
@@ -179,7 +199,7 @@ func cryptoRandInt(min, max int) (int, error) {
 
 func downloadFile(ctx context.Context, url string, output string) error {
 	var err error
-	for i := 0; i < maxAttempts; i++ {
+	for i := 0; i < c_retry_attempts; i++ {
 		err = tryDownloadFile(ctx, url, output)
 		if err == nil {
 			return nil
@@ -203,8 +223,8 @@ func downloadFile(ctx context.Context, url string, output string) error {
 }
 
 func tryDownloadFile(ctx context.Context, url string, output string) error {
-	b_sem_download.Acquire()
-	defer b_sem_download.Release()
+	sem_download.Acquire()
+	defer sem_download.Release()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -227,8 +247,8 @@ func tryDownloadFile(ctx context.Context, url string, output string) error {
 }
 
 func Sha256(in string) (checksum string) {
-	g_sem_shastring.Acquire()
-	defer g_sem_shastring.Release()
+	sem_shastring.Acquire()
+	defer sem_shastring.Release()
 	hash := sha256.New()
 	hash.Write([]byte(in))
 	checksum = hex.EncodeToString(hash.Sum(nil))
@@ -236,8 +256,8 @@ func Sha256(in string) (checksum string) {
 }
 
 func resizePng(imgFile *os.File, newWidth int, outputFilename string) error {
-	g_sem_resize.Acquire()
-	defer g_sem_resize.Release()
+	sem_resize.Acquire()
+	defer sem_resize.Release()
 	if newWidth <= 0 {
 		return errors.New("invalid width provided")
 	}
@@ -275,8 +295,8 @@ func resizePng(imgFile *os.File, newWidth int, outputFilename string) error {
 }
 
 func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
-	g_sem_resize.Acquire()
-	defer g_sem_resize.Release()
+	sem_resize.Acquire()
+	defer sem_resize.Release()
 	if newWidth <= 0 {
 		return errors.New("invalid width provided")
 	}
@@ -318,8 +338,8 @@ func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
 }
 
 func convertAndOptimizePNG(imgFile *os.File, outputFilename string) error {
-	g_sem_png2jpg.Acquire()
-	defer g_sem_png2jpg.Release()
+	sem_png2jpg.Acquire()
+	defer sem_png2jpg.Release()
 	imgFile.Seek(0, 0)
 	img, err := imaging.Decode(imgFile)
 	if err != nil {
@@ -345,8 +365,8 @@ func convertAndOptimizePNG(imgFile *os.File, outputFilename string) error {
 }
 
 func overlayImages(jpgFile, pngFile *os.File, outputFilename string) error {
-	g_sema_watermark.Acquire()
-	defer g_sema_watermark.Release()
+	sema_watermark.Acquire()
+	defer sema_watermark.Release()
 	jpgFile.Seek(0, 0)
 	baseImg, _, err := image.Decode(jpgFile)
 	if err != nil {
@@ -412,8 +432,8 @@ func colorDistance(c1, c2 color.Color) uint64 {
 }
 
 func ConvertToDarkMode(img *os.File, directory, outputFilename string) (*os.File, error) {
-	g_sem_darkimage.Acquire()
-	defer g_sem_darkimage.Release()
+	sem_darkimage.Acquire()
+	defer sem_darkimage.Release()
 	img.Seek(0, 0)
 	srcImage, _, err := image.Decode(img)
 	if err != nil {
@@ -426,9 +446,9 @@ func ConvertToDarkMode(img *os.File, directory, outputFilename string) (*os.File
 			srcPixel := srcImage.At(x, y)
 
 			if colorDistance(srcPixel, color.Black) <= uint64(0x050505)*uint64(0x050505) {
-				dstImage.Set(x, y, textColor)
+				dstImage.Set(x, y, color_text)
 			} else if colorDistance(srcPixel, color.White) <= uint64(0x0F0F0F)*uint64(0x0F0F0F) {
-				dstImage.Set(x, y, backgroundColor)
+				dstImage.Set(x, y, color_background)
 			} else {
 				dstImage.Set(x, y, srcPixel)
 			}
@@ -440,7 +460,7 @@ func ConvertToDarkMode(img *os.File, directory, outputFilename string) (*os.File
 		return img, err
 	}
 	err = jpeg.Encode(tempFile, dstImage, &jpeg.EncoderOptions{
-		Quality:         ThumbnailQualityScore,
+		Quality:         jpeg_compression_ratio,
 		OptimizeCoding:  true,
 		ProgressiveMode: true,
 	})
@@ -469,7 +489,7 @@ func verifyBinaries(binaries []string) error {
 			return fmt.Errorf("binary '%s' is not executable: %w", binary, err)
 		}
 
-		Binaries[binary] = path
+		m_required_binaries[binary] = path
 
 		log.Printf("binary '%s' exists and is executable at path: %v", binary, path)
 	}
@@ -504,7 +524,7 @@ func checkIfExecutable(path string) error {
 		return fmt.Errorf("binary does not exist")
 	}
 
-	if runtime.GOOS != "windows" && info.Mode()&ExecutePermissions == 0 {
+	if runtime.GOOS != "windows" && info.Mode()&c_dir_permissions == 0 {
 		return fmt.Errorf("binary is not executable")
 	}
 
@@ -515,33 +535,33 @@ func NewIdentifier(length int) string {
 	for {
 		identifier := make([]byte, length)
 		for i := range identifier {
-			max := big.NewInt(int64(len(charset)))
+			max := big.NewInt(int64(len(c_identifier_charset)))
 			randIndex, err := rand.Int(rand.Reader, max)
 			if err != nil {
 				log.Printf("failed to generate random number: %v", err)
 				continue
 			}
-			identifier[i] = charset[randIndex.Int64()]
+			identifier[i] = c_identifier_charset[randIndex.Int64()]
 		}
 
 		id := fmt.Sprintf("%4d%v", time.Now().UTC().Year(), string(identifier))
 
-		IdentifierMu.RLock()
-		_, exists := UsedIdentifiers[id]
-		IdentifierMu.RUnlock()
+		mu_identifier.RLock()
+		_, exists := m_used_identifiers[id]
+		mu_identifier.RUnlock()
 
 		if !exists {
-			IdentifierMu.Lock()
-			UsedIdentifiers[id] = true
-			IdentifierMu.Unlock()
+			mu_identifier.Lock()
+			m_used_identifiers[id] = true
+			mu_identifier.Unlock()
 			return id
 		}
 	}
 }
 
 func WritePendingPageToJson(pp PendingPage, outputPath string) error {
-	g_sem_wjsonfile.Acquire()
-	defer g_sem_wjsonfile.Release()
+	sem_wjsonfile.Acquire()
+	defer sem_wjsonfile.Release()
 	file, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -560,8 +580,8 @@ func WritePendingPageToJson(pp PendingPage, outputPath string) error {
 }
 
 func WriteResultDataToJson(rd ResultData) error {
-	g_sem_wjsonfile.Acquire()
-	defer g_sem_wjsonfile.Release()
+	sem_wjsonfile.Acquire()
+	defer sem_wjsonfile.Release()
 	file, err := os.OpenFile(rd.RecordPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -578,4 +598,48 @@ func WriteResultDataToJson(rd ResultData) error {
 	}
 
 	return nil
+}
+
+func populateDictionary() {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
+	err := filepath.Walk(filepath.Join(".", "reference"), func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("Error accessing a path %q: %v\n", path, err)
+			return err
+		}
+
+		if !info.IsDir() && strings.HasPrefix(info.Name(), "words-") && strings.HasSuffix(info.Name(), ".txt") {
+			language := strings.ReplaceAll(info.Name(), "words-", "")
+			language = strings.ReplaceAll(language, ".txt", "")
+
+			var words []string
+
+			file, fileErr := os.Open(path)
+			if fileErr != nil {
+				log.Printf("Error opening file %q: %v\n", path, fileErr)
+				return fileErr
+			}
+
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				words = append(words, scanner.Text())
+			}
+
+			m_language_dictionary[language] = words
+
+			log.Printf("Saved %d %v words in the m_language_dictionary.", len(words), language)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("(NON-FATAL) Error while populating the m_language_dictionary: %v", err)
+	}
+	for _, words := range m_language_dictionary {
+		if len(words) > 0 {
+			a_b_dictionary_loaded.Store(true)
+			return
+		}
+	}
 }

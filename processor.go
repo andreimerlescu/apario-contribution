@@ -1,3 +1,20 @@
+/*
+Project Apario is the World's Truth Repository that was invented and started by Andrei Merlescu in 2020.
+Copyright (C) 2023  Andrei Merlescu
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 package main
 
 import (
@@ -25,7 +42,7 @@ func loadCsv(ctx context.Context, filename string, callback CallbackFunc) error 
 			log.Fatalf("failed to close the file %v caused error %v", filename, closeErr)
 		}
 	}(file)
-	bufferedReader := bufio.NewReaderSize(file, BufferSize)
+	bufferedReader := bufio.NewReaderSize(file, reader_buffer_bytes)
 	reader := csv.NewReader(bufferedReader)
 	reader.Comma = '|'
 	reader.FieldsPerRecord = -1
@@ -35,7 +52,7 @@ func loadCsv(ctx context.Context, filename string, callback CallbackFunc) error 
 		return bufferReadErr
 	}
 	log.Printf("headerFields = %v", strings.Join(headerFields, ","))
-	row := make(chan []Column, SemaLimiter)
+	row := make(chan []Column, channel_buffer_size)
 	totalRows, rowWg := atomic.Uint32{}, sync.WaitGroup{}
 	done := make(chan struct{})
 	go ReceiveRows(ctx, row, filename, callback, done)
@@ -71,7 +88,7 @@ func loadXlsx(ctx context.Context, filename string, callback CallbackFunc) error
 		}
 	}
 	log.Printf("headerFields = %v", strings.Join(headerFields, ","))
-	row := make(chan []Column, SemaLimiter)
+	row := make(chan []Column, channel_buffer_size)
 	totalRows, rowWg := atomic.Uint32{}, sync.WaitGroup{}
 	done := make(chan struct{})
 	go ReceiveRows(ctx, row, filename, callback, done)
