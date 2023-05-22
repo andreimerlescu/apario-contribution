@@ -228,4 +228,4 @@ if It's something that the project needs.
 
 ## License
 
-This project is licensed with the MIT License.
+This project is licensed with the GPL-3 License and all source code in this repository is open source and owned by Project Apario LLC.
