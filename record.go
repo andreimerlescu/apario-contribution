@@ -19,7 +19,7 @@ package main
 
 import (
 	"context"
-	`fmt`
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -183,5 +183,68 @@ func processRecord(ctx context.Context, row []Column) error {
 	sm_documents.Store(identifier, rd)
 	log.Printf("sending URL %v (rd struct) into the ch_ImportedRow channel", rd.URL)
 	ch_ImportedRow <- rd
+	return nil
+}
+
+func processLocation(ctx context.Context, row []Column) error {
+	var (
+		countryName, countryCode, continent, stateProvinceName, cityName string
+		latitude, longitude                                              float64
+		intConversionErr, floatConversionErr                             error
+	)
+	for _, column := range row {
+		switch column.Header {
+		case "countryname":
+			countryName = column.Value
+		case "countrycode":
+			countryCode = column.Value
+		case "Continent":
+			continent = column.Value
+		case "StateProvinceName":
+			stateProvinceName = column.Value
+		case "cityname":
+			cityName = column.Value
+		case "latitude":
+			if len(column.Value) > 0 {
+				latitude, floatConversionErr = strconv.ParseFloat(column.Value, 32)
+			}
+		case "longitude":
+			if len(column.Value) > 0 {
+				longitude, floatConversionErr = strconv.ParseFloat(column.Value, 32)
+			}
+		default:
+			log.Printf("skipping column %v because its header is not accepted", column.Header)
+		}
+	}
+
+	if intConversionErr != nil {
+		log.Fatalf("failed to convert int: %v", intConversionErr)
+	}
+
+	if floatConversionErr != nil {
+		log.Fatalf("failed to convert float: %v", floatConversionErr)
+	}
+
+	location := &Location{
+		Continent:   continent,
+		Country:     countryName,
+		CountryCode: countryCode,
+		City:        cityName,
+		State:       stateProvinceName,
+		Longitude:   longitude,
+		Latitude:    latitude,
+	}
+
+	mu_location_cities.Lock()
+	m_location_cities[cityName] = location
+	mu_location_cities.Unlock()
+
+	mu_location_countries.Lock()
+	m_location_countries[countryName] = location
+	mu_location_countries.Unlock()
+
+	mu_location_states.Lock()
+	m_location_states[stateProvinceName] = location
+	mu_location_states.Unlock()
 	return nil
 }

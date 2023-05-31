@@ -97,7 +97,7 @@ func receiveOnGenerateLightCh(ctx context.Context, ch <-chan PendingPage) {
 			return
 		case pp, ok := <-ch:
 			if ok {
-				log.Printf("received on ch_GenerateLight, running generateLightThumbnails(%v) for ID %v (pgNo %d)", filepath.Base(pp.Light.Original), pp.Identifier, pp.PageNumber)
+				log.Printf("received on ch_GenerateLight, running generateLightThumbnails(%v) for ID %v (pgNo %d)", filepath.Base(pp.PNG.Light.Original), pp.Identifier, pp.PageNumber)
 				go generateLightThumbnails(ctx, pp)
 			} else {
 				log.Printf("ch_GenerateLight is closed but received some data")
@@ -113,7 +113,7 @@ func receiveOnGenerateDarkCh(ctx context.Context, ch <-chan PendingPage) {
 			return
 		case pp, ok := <-ch:
 			if ok {
-				log.Printf("received on ch_GenerateDark, running generateDarkThumbnails(%v) for ID %v (pgNo %d)", filepath.Base(pp.Dark.Original), pp.Identifier, pp.PageNumber)
+				log.Printf("received on ch_GenerateDark, running generateDarkThumbnails(%v) for ID %v (pgNo %d)", filepath.Base(pp.PNG.Dark.Original), pp.Identifier, pp.PageNumber)
 				go generateDarkThumbnails(ctx, pp)
 			} else {
 				log.Printf("ch_GenerateDark is closed but received some data")

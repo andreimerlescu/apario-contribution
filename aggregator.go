@@ -18,9 +18,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 package main
 
 import (
-	`context`
+	"context"
 )
 
 func aggregatePendingPage(ctx context.Context, pp PendingPage) {
-	ch_CompletedPage <- pp
+	ch_CompiledDocument <- Document{
+		Identifier:          pp.RecordIdentifier,
+		URL:                 "",
+		Pages:               nil,
+		TotalPages:          0,
+		CoverPageIdentifier: "",
+		Collection:          Collection{},
+	}
 }

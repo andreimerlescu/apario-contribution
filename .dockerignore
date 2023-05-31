@@ -1,2 +1,4 @@
 tmp/*
 logs/*
+real-tmp/*
+.git*

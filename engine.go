@@ -28,13 +28,11 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	`text/tabwriter`
-	"time"
+	"text/tabwriter"
 )
 
 func main() {
-	startedAt := time.Now().UTC()
-
+	ctx, cancel := context.WithCancel(context.Background())
 	flag.Usage = func() {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "./apario-contribution [FLAGS]")
@@ -118,9 +116,7 @@ func main() {
 		panic("-dir is a required flag to run this program")
 	}
 
-	logFilename := filepath.Join(".", "logs", fmt.Sprintf("engine-%04d-%02d-%02d-%02d-%02d-%02d.log",
-		startedAt.Year(), startedAt.Month(), startedAt.Day(), startedAt.Hour(), startedAt.Minute(), startedAt.Second()))
-	logFile, logFileErr := os.OpenFile(logFilename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	logFile, logFileErr := os.OpenFile(*flag_g_log_file, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	if logFileErr != nil {
 		log.Fatal("Failed to open log file: ", logFileErr)
 	}
@@ -134,6 +130,21 @@ func main() {
 		if err != nil {
 			log.Printf("failed to close the logFile due to error: %v", err)
 		}
+		cancel()
+		close(ch_ImportedRow)       // step 01
+		close(ch_ExtractText)       // step 02
+		close(ch_ExtractPages)      // step 03
+		close(ch_GeneratePng)       // step 04
+		close(ch_GenerateLight)     // step 05
+		close(ch_GenerateDark)      // step 06
+		close(ch_ConvertToJpg)      // step 07
+		close(ch_PerformOcr)        // step 08
+		close(ch_AnalyzeText)       // step 09
+		close(ch_AnalyzeCryptonyms) // step 10
+		close(ch_AnalyzeLocations)  // step 11
+		close(ch_AnalyzeGematria)   // step 12
+		close(ch_AnalyzeDictionary) // step 13
+		close(ch_CompletedPage)     // step 14
 		fmt.Println("Program killed!")
 		os.Exit(1)
 	}()
@@ -152,10 +163,9 @@ func main() {
 		//log.Printf("m_cryptonyms generated as: %v", m_cryptonyms)
 	}
 
-	var (
-		err error
-		ctx = context.WithValue(context.Background(), CtxKey("filename"), *flag_s_file)
-	)
+	var err error
+
+	ctx = context.WithValue(ctx, CtxKey("filename"), *flag_s_file)
 
 	go receiveImportedRow(ctx, ch_ImportedRow)             // step 01 - runs validatePdf before sending into ch_ExtractText
 	go receiveOnExtractTextCh(ctx, ch_ExtractText)         // step 02 - runs extractPlainTextFromPdf before sending into ch_ExtractPages
@@ -173,6 +183,20 @@ func main() {
 	go receiveCompletedPendingPage(ctx, ch_CompletedPage)  // step 14 - compiles a final result of a Document before sending it into ch_CompiledDocument
 	go receiveCompiledDocument(ctx, ch_CompiledDocument)   // step 15 - compiles the SQL insert statements for the Document
 
+	go func() {
+		wg_active_tasks.Add(1)
+		defer wg_active_tasks.Done()
+		err = loadCsv(ctx, filepath.Join(".", "reference", "locations.csv"), processLocation)
+
+		if err != nil {
+			log.Printf("received an error from loadCsv/loadXlsx namely: %v", err) // a problem habbened
+			return
+		}
+
+		a_b_locations_loaded.Store(true)
+
+	}()
+
 	if strings.Contains(*flag_s_file, ".csv") || strings.Contains(*flag_s_file, ".psv") {
 		err = loadCsv(ctx, *flag_s_file, processRecord) // parse the file
 	} else if strings.Contains(*flag_s_file, ".xlsx") {
@@ -187,24 +211,8 @@ func main() {
 
 	defer logFile.Close()
 
-	go func() {
-		wg_active_tasks.Wait()
-		close(ch_ImportedRow)       // step 01
-		close(ch_ExtractText)       // step 02
-		close(ch_ExtractPages)      // step 03
-		close(ch_GeneratePng)       // step 04
-		close(ch_GenerateLight)     // step 05
-		close(ch_GenerateDark)      // step 06
-		close(ch_ConvertToJpg)      // step 07
-		close(ch_PerformOcr)        // step 08
-		close(ch_AnalyzeText)       // step 09
-		close(ch_AnalyzeCryptonyms) // step 10
-		close(ch_AnalyzeLocations)  // step 11
-		close(ch_AnalyzeGematria)   // step 12
-		close(ch_AnalyzeDictionary) // step 13
-		close(ch_CompletedPage)     // step 14
-		ch_Done <- struct{}{}       // step 15
-	}()
+	wg_active_tasks.Wait()
+	ch_Done <- struct{}{}
 
 	for {
 		select {
@@ -214,10 +222,9 @@ func main() {
 			log.SetOutput(os.Stdout)
 			log.Printf("done processing everything... time to end things now!")
 			watchdog <- os.Kill
-		case pp, ok := <-ch_CompletedPage:
+		case d, ok := <-ch_CompiledDocument:
 			if ok {
-				log.Printf("Completed processing page %v (ID: %v) from Document %v",
-					pp.PageNumber, pp.Identifier, pp.RecordIdentifier)
+				log.Printf("Completed processing document %v", d.Identifier)
 			}
 		}
 	}

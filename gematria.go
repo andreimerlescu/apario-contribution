@@ -117,7 +117,7 @@ func calculateGemAnalysis(data string) GemAnalysis {
 		word = strings.TrimLeft(word, "")
 
 		a := GemAnalysis{}
-		a.ComputeScore(data)
+		a.ComputeScore(word)
 
 		analysis.Words[data] = a.Score
 	}

@@ -1,6 +1,7 @@
 .idea/*
 tmp/*
 !tmp/.keep
+real-tmp/*
 ._*
 .DS_Store
 bin/
@@ -10,3 +11,4 @@ engine.rb
 apario-contribution
 importable/._*
 importable/~$*
+reference/locations.csv

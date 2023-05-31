@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 package main
 
 import (
-	`bufio`
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -34,14 +34,14 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
-	`io/fs`
+	"io/fs"
 	"log"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	`path/filepath`
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -54,8 +54,12 @@ import (
 )
 
 func fileHasData(filename string) (bool, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_filedata.Acquire()
 	defer sem_filedata.Release()
+
 	_, existsErr := os.Stat(filename)
 	if os.IsNotExist(existsErr) {
 		return false, fmt.Errorf("no such file")
@@ -82,6 +86,9 @@ func fileHasData(filename string) (bool, error) {
 }
 
 func parseDateString(in string) (out time.Time, err error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	possibleFormats := []string{
 		"01-02-06",
 		"01/02/2006",
@@ -101,6 +108,9 @@ func parseDateString(in string) (out time.Time, err error) {
 }
 
 func compressString(input []byte) ([]byte, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
 
@@ -118,6 +128,9 @@ func compressString(input []byte) ([]byte, error) {
 }
 
 func decompressString(input []byte) ([]byte, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	buf := bytes.NewBuffer(input)
 	gzipReader, err := gzip.NewReader(buf)
 	if err != nil {
@@ -134,6 +147,9 @@ func decompressString(input []byte) ([]byte, error) {
 }
 
 func generateThreeCharSequences(input string) []Qbit {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	qbitMap := make(map[[3]byte]int)
 
 	for i := 0; i < len(input)-2; i++ {
@@ -158,6 +174,9 @@ func generateThreeCharSequences(input string) []Qbit {
 }
 
 func IsDir(in string) bool {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	fileInfo, err := os.Stat(in)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -170,8 +189,12 @@ func IsDir(in string) bool {
 }
 
 func FileSha512(file *os.File) (checksum string) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_shafile.Acquire()
 	defer sem_shafile.Release()
+
 	hash := sha512.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		panic(err)
@@ -182,6 +205,9 @@ func FileSha512(file *os.File) (checksum string) {
 }
 
 func cryptoRandInt(min, max int) (int, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	if min > max {
 		return 0, errors.New("invalid range")
 	}
@@ -198,6 +224,9 @@ func cryptoRandInt(min, max int) (int, error) {
 }
 
 func downloadFile(ctx context.Context, url string, output string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	var err error
 	for i := 0; i < c_retry_attempts; i++ {
 		err = tryDownloadFile(ctx, url, output)
@@ -223,8 +252,12 @@ func downloadFile(ctx context.Context, url string, output string) error {
 }
 
 func tryDownloadFile(ctx context.Context, url string, output string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_download.Acquire()
 	defer sem_download.Release()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -256,8 +289,12 @@ func Sha256(in string) (checksum string) {
 }
 
 func resizePng(imgFile *os.File, newWidth int, outputFilename string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_resize.Acquire()
 	defer sem_resize.Release()
+
 	if newWidth <= 0 {
 		return errors.New("invalid width provided")
 	}
@@ -295,8 +332,12 @@ func resizePng(imgFile *os.File, newWidth int, outputFilename string) error {
 }
 
 func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_resize.Acquire()
 	defer sem_resize.Release()
+
 	if newWidth <= 0 {
 		return errors.New("invalid width provided")
 	}
@@ -326,9 +367,9 @@ func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
 
 	// Encode the new image as a progressive JPEG and save it to the output file
 	err = jpeg.Encode(outputFile, newImage, &jpeg.EncoderOptions{
-		Quality:         75,
+		Quality:         *flag_g_jpg_quality,
 		OptimizeCoding:  true,
-		ProgressiveMode: true,
+		ProgressiveMode: *flag_g_progressive_jpeg,
 	})
 	if err != nil {
 		return err
@@ -338,33 +379,111 @@ func resizeJpg(imgFile *os.File, newWidth int, outputFilename string) error {
 }
 
 func convertAndOptimizePNG(imgFile *os.File, outputFilename string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_png2jpg.Acquire()
 	defer sem_png2jpg.Release()
+
 	imgFile.Seek(0, 0)
 	img, err := imaging.Decode(imgFile)
 	if err != nil {
 		return err
 	}
 
-	outputFile, err := os.Create(outputFilename)
-	if err != nil {
-		return err
+	if paletted, ok := img.(*image.Paletted); ok {
+		img = palettedToRGBA(paletted)
+		log.Printf("converting `img` %v *image.Paletted into %T", imgFile.Name(), img)
+	}
+
+	if rgba64, ok := img.(*image.RGBA64); ok {
+		img = rgba64ToRGBA(rgba64)
+		log.Printf("converting `img` %v *image.RGBA64 into %T", imgFile.Name(), img)
+	}
+
+	outputFile, err2 := os.Create(outputFilename)
+	if err2 != nil {
+		return err2
 	}
 	defer outputFile.Close()
 
-	err = jpeg.Encode(outputFile, img, &jpeg.EncoderOptions{
-		Quality:         71,
+	err3 := jpeg.Encode(outputFile, img, &jpeg.EncoderOptions{
+		Quality:         *flag_g_jpg_quality,
 		OptimizeCoding:  true,
-		ProgressiveMode: true,
+		ProgressiveMode: *flag_g_progressive_jpeg,
 	})
-	if err != nil {
-		return err
+	if err3 != nil {
+		return err3
 	}
 
 	return nil
 }
 
+func palettedToRGBA(src *image.Paletted) *image.RGBA {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			dst.Set(x, y, src.At(x, y))
+		}
+	}
+
+	return dst
+}
+
+func palettedToYCbCr(src *image.Paletted) *image.YCbCr {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
+	b := src.Bounds()
+	dst := image.NewYCbCr(b, image.YCbCrSubsampleRatio444)
+
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, b, _ := src.At(x, y).RGBA()
+
+			yy, cb, cr := color.RGBToYCbCr(uint8(r), uint8(g), uint8(b))
+
+			i := dst.YOffset(x, y)
+			dst.Y[i] = yy
+			dst.Cb[i] = cb
+			dst.Cr[i] = cr
+		}
+	}
+
+	return dst
+}
+
+func rgba64ToRGBA(src *image.RGBA64) *image.RGBA {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r16, g16, b16, a16 := src.At(x, y).RGBA()
+
+			r := uint8(r16 >> 8)
+			g := uint8(g16 >> 8)
+			b := uint8(b16 >> 8)
+			a := uint8(a16 >> 8)
+
+			dst.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: a})
+		}
+	}
+
+	return dst
+}
+
 func overlayImages(jpgFile, pngFile *os.File, outputFilename string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	sema_watermark.Acquire()
 	defer sema_watermark.Release()
 	jpgFile.Seek(0, 0)
@@ -388,9 +507,9 @@ func overlayImages(jpgFile, pngFile *os.File, outputFilename string) error {
 	}
 	defer outputFile.Close()
 	err = jpeg.Encode(outputFile, m, &jpeg.EncoderOptions{
-		Quality:         75,
+		Quality:         *flag_g_jpg_quality,
 		OptimizeCoding:  true,
-		ProgressiveMode: true,
+		ProgressiveMode: *flag_g_progressive_jpeg,
 	})
 	if err != nil {
 		return err
@@ -421,6 +540,9 @@ func overlayImages(jpgFile, pngFile *os.File, outputFilename string) error {
 // It is used to calculate distances between two points in a 2D or 3D space, and it is a key component of many machine
 // learning algorithms and computer vision applications.
 func colorDistance(c1, c2 color.Color) uint64 {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	r1, g1, b1, _ := c1.RGBA()
 	r2, g2, b2, _ := c2.RGBA()
 
@@ -432,6 +554,8 @@ func colorDistance(c1, c2 color.Color) uint64 {
 }
 
 func ConvertToDarkMode(img *os.File, directory, outputFilename string) (*os.File, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	sem_darkimage.Acquire()
 	defer sem_darkimage.Release()
 	img.Seek(0, 0)
@@ -474,6 +598,8 @@ func ConvertToDarkMode(img *os.File, directory, outputFilename string) (*os.File
 }
 
 func verifyBinaries(binaries []string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	for _, binary := range binaries {
 		if runtime.GOOS == "windows" {
 			binary += ".exe"
@@ -498,6 +624,8 @@ func verifyBinaries(binaries []string) error {
 }
 
 func DirHasPDFs(dirname string) (bool, error) {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	f, err := os.Open(dirname)
 	if err != nil {
 		return false, err
@@ -519,6 +647,8 @@ func DirHasPDFs(dirname string) (bool, error) {
 }
 
 func checkIfExecutable(path string) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("binary does not exist")
@@ -532,6 +662,8 @@ func checkIfExecutable(path string) error {
 }
 
 func NewIdentifier(length int) string {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	for {
 		identifier := make([]byte, length)
 		for i := range identifier {
@@ -559,20 +691,22 @@ func NewIdentifier(length int) string {
 	}
 }
 
-func WritePendingPageToJson(pp PendingPage, outputPath string) error {
+func WritePendingPageToJson(pp PendingPage) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
+
 	sem_wjsonfile.Acquire()
 	defer sem_wjsonfile.Release()
-	file, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+
+	file, err := os.OpenFile(pp.ManifestPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Create an encoder to write JSON data to the file
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "    ")
 
-	// Write the struct as JSON
 	if err := encoder.Encode(pp); err != nil {
 		return err
 	}
@@ -580,6 +714,8 @@ func WritePendingPageToJson(pp PendingPage, outputPath string) error {
 }
 
 func WriteResultDataToJson(rd ResultData) error {
+	wg_active_tasks.Add(1)
+	defer wg_active_tasks.Done()
 	sem_wjsonfile.Acquire()
 	defer sem_wjsonfile.Release()
 	file, err := os.OpenFile(rd.RecordPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
@@ -588,11 +724,9 @@ func WriteResultDataToJson(rd ResultData) error {
 	}
 	defer file.Close()
 
-	// Create an encoder to write JSON data to the file
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "    ")
 
-	// Write the struct as JSON
 	if err := encoder.Encode(rd); err != nil {
 		return err
 	}
@@ -614,7 +748,7 @@ func populateDictionary() {
 			language := strings.ReplaceAll(info.Name(), "words-", "")
 			language = strings.ReplaceAll(language, ".txt", "")
 
-			var words []string
+			words := make(map[string]struct{})
 
 			file, fileErr := os.Open(path)
 			if fileErr != nil {
@@ -624,7 +758,7 @@ func populateDictionary() {
 
 			scanner := bufio.NewScanner(file)
 			for scanner.Scan() {
-				words = append(words, scanner.Text())
+				words[scanner.Text()] = struct{}{}
 			}
 
 			m_language_dictionary[language] = words

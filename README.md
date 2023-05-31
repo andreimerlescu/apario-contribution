@@ -206,6 +206,24 @@ When running the docker container, you are required to supply the required argum
 make drun jfk2023.xlsx
 ```
 
+Or if you wish to enter an interactive shell:
+
+```shell
+make dbuild
+make dbash
+```
+
+Inside the container, you can run:
+
+```shell
+make containered sample-jfk.xlsx
+```
+
+TIP: Replace `sample-jfk.xlsx` with any properly formatted file inside the importable/* directory (.psv, .csv or .xlsx only).
+
+The `make containered` command is responsible for tuning the semaphores to run on a smaller system or a container, 
+otherwise it'll assume bare metal and tune the performance more aggressively to complete the import process faster.
+
 Inside the container, you're running as the user `apario` and not as `root`.
 
 ## Future Proves Past
@@ -221,6 +239,10 @@ ingesting. Future updates to this code will incorporate those changes.
 
 Feel free to fork the project, submit a contribution, and then create a pull request. I'll review it and incorporate it 
 if It's something that the project needs. 
+
+### TODO
+
+- [ ] 
 
 ### Contributors
 
