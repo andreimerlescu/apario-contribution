@@ -12,3 +12,6 @@ apario-contribution
 importable/._*
 importable/~$*
 reference/locations.csv
+private/*
+!private/.parts
+!private/locations.csv.placeholder
