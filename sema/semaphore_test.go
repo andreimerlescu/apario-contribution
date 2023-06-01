@@ -1,9 +1,9 @@
 package sema
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBakersDozen(t *testing.T) {
@@ -33,7 +33,7 @@ func TestBakersDozen(t *testing.T) {
 }
 
 func TestSemaphoreAcquireRelease(t *testing.T) {
-	sem := NewTimeoutable(3, 1*time.Second)
+	sem := New(3)
 
 	for i := 0; i < 10; i++ {
 		sem.Acquire()
@@ -47,7 +47,7 @@ func TestSemaphoreAcquireRelease(t *testing.T) {
 }
 
 func TestSemaphoreEmpty(t *testing.T) {
-	sem := NewTimeoutable(2, 200*time.Millisecond)
+	sem := New(2)
 
 	if !sem.IsEmpty() {
 		t.Error("semaphore should be empty")
@@ -63,18 +63,5 @@ func TestSemaphoreEmpty(t *testing.T) {
 
 	if !sem.IsEmpty() {
 		t.Error("semaphore should be empty")
-	}
-}
-
-func ExampleSemaphore() {
-	sem := NewTimeoutable(3, 1*time.Second)
-
-	for i := 0; i < 10; i++ {
-		go func() {
-			sem.Acquire()
-			defer sem.Release()
-
-			// do something semaphore-guarded
-		}()
 	}
 }

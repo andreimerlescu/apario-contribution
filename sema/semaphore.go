@@ -8,6 +8,7 @@ type Semaphore interface {
 	Acquire()
 	Release()
 	Len() int
+	IsEmpty() bool
 }
 
 type semaphore struct {
@@ -32,6 +33,10 @@ func New(maxConcurrency int) Semaphore {
 		semC:    make(chan struct{}, safe(maxConcurrency)),
 		timeout: time.Millisecond * 90,
 	}
+}
+
+func (s *semaphore) IsEmpty() bool {
+	return s.Len() == 0
 }
 
 func (s *semaphore) Len() int {
