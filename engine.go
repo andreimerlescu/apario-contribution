@@ -146,7 +146,7 @@ func main() {
 		close(ch_AnalyzeDictionary) // step 13
 		close(ch_CompletedPage)     // step 14
 		fmt.Println("Program killed!")
-		os.Exit(1)
+		os.Exit(0)
 	}()
 
 	a_b_dictionary_loaded.Store(false)
@@ -162,8 +162,6 @@ func main() {
 		}
 		//log.Printf("m_cryptonyms generated as: %v", m_cryptonyms)
 	}
-
-	var err error
 
 	ctx = context.WithValue(ctx, CtxKey("filename"), *flag_s_file)
 
@@ -186,10 +184,9 @@ func main() {
 	go func() {
 		wg_active_tasks.Add(1)
 		defer wg_active_tasks.Done()
-		err = loadCsv(ctx, filepath.Join(".", "reference", "locations.csv"), processLocation)
-
-		if err != nil {
-			log.Printf("received an error from loadCsv/loadXlsx namely: %v", err) // a problem habbened
+		locationsCsvErr := loadCsv(ctx, filepath.Join(".", "private", "locations.csv"), processLocation)
+		if locationsCsvErr != nil {
+			log.Printf("received an error from loadCsv/loadXlsx namely: %v", locationsCsvErr) // a problem habbened
 			return
 		}
 
@@ -197,16 +194,17 @@ func main() {
 
 	}()
 
+	var importErr error
 	if strings.Contains(*flag_s_file, ".csv") || strings.Contains(*flag_s_file, ".psv") {
-		err = loadCsv(ctx, *flag_s_file, processRecord) // parse the file
+		importErr = loadCsv(ctx, *flag_s_file, processRecord) // parse the file
 	} else if strings.Contains(*flag_s_file, ".xlsx") {
-		err = loadXlsx(ctx, *flag_s_file, processRecord) // parse the file
+		importErr = loadXlsx(ctx, *flag_s_file, processRecord) // parse the file
 	} else {
 		panic(fmt.Sprintf("unable to parse file %v", *flag_s_file))
 	}
 
-	if err != nil {
-		log.Printf("received an error from loadCsv/loadXlsx namely: %v", err) // a problem habbened
+	if importErr != nil {
+		log.Printf("received an error from loadCsv/loadXlsx namely: %v", importErr) // a problem habbened
 	}
 
 	defer logFile.Close()

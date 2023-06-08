@@ -89,6 +89,12 @@ func analyzeLocations(ctx context.Context, pp PendingPage) {
 					if location, ok := m_location_countries[word]; ok {
 						fileLocations = append(fileLocations, location)
 					}
+					if location, ok := m_location_states[word]; ok {
+						fileLocations = append(fileLocations, location)
+					}
+					if location, ok := m_location_cities[word]; ok {
+						fileLocations = append(fileLocations, location)
+					}
 				}
 			}
 		}
