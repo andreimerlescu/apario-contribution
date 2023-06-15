@@ -28,37 +28,14 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"text/tabwriter"
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-	flag.Usage = func() {
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "./apario-contribution [FLAGS]")
-		fmt.Fprintln(w, "Flag\tDefault\tDescription")
-		nl, dl, ul := 4, 7, 11
-		out := ""
-		flag.VisitAll(func(f *flag.Flag) {
-			out += fmt.Sprintf("-%s\t%s\t%s\n", f.Name, f.DefValue, f.Usage)
-			if len(f.Name)+1 > nl {
-				nl = len(f.Name) + 1
-			}
-			if len(f.DefValue) > dl {
-				dl = len(f.DefValue)
-			}
-			if len(f.Usage) > ul {
-				ul = len(f.Usage)
-			}
-			fmt.Fprintf(w, "%v\t%v\t%v\n", strings.Repeat("-", nl), strings.Repeat("-", dl), strings.Repeat("-", ul))
-			fmt.Fprintln(w, out)
-		})
-		w.Flush()
-	}
 
 	for _, arg := range os.Args {
 		if arg == "help" {
-			flag.Usage()
+			fmt.Println(config.Usage())
 			os.Exit(0)
 		}
 		if arg == "show" {
@@ -77,7 +54,10 @@ func main() {
 		}
 	}
 
-	flag.Parse()
+	configErr := config.Parse(filepath.Join(".", "config.yaml"))
+	if configErr != nil {
+		log.Fatalf("failed to parse config.yaml due to err: %v", configErr)
+	}
 
 	binaryErr := verifyBinaries(sl_required_binaries)
 	if binaryErr != nil {
@@ -160,7 +140,13 @@ func main() {
 		if cryptonymMarshalErr != nil {
 			log.Printf("failed to load the m_cryptonyms due to error %v", cryptonymMarshalErr)
 		}
-		//log.Printf("m_cryptonyms generated as: %v", m_cryptonyms)
+		out := ""
+		var cryptonyms []string
+		for cryptonym, _ := range m_cryptonyms {
+			cryptonyms = append(cryptonyms, cryptonym)
+		}
+		out = strings.Join(cryptonyms, ",")
+		log.Printf("Cryptonyms to search for: %v", out)
 	}
 
 	ctx = context.WithValue(ctx, CtxKey("filename"), *flag_s_file)

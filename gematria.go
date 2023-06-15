@@ -22,7 +22,6 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"time"
 )
 
 func InitGematria() {
@@ -74,62 +73,11 @@ func charGematrix(str string) (uint, uint, uint) {
 	return j, e, s
 }
 
-func rejectFromSlice(items []string, rejected string) (results []string) {
-	for _, item := range items {
-		if item != rejected {
-			results = append(results, item)
-		}
-	}
-	return
-}
-
-func calculateGemAnalysis(data string) GemAnalysis {
+func NewGemScore(data string) GemScore {
 	if !a_b_gematria_loaded.Load() {
 		InitGematria()
 		a_b_gematria_loaded.Store(true)
 	}
-
-	words := strings.Split(data, " ")
-	sentences := strings.Split(data, ". ")
-
-	words = rejectFromSlice(words, "")
-	words = rejectFromSlice(words, " ")
-
-	totalWords := len(words)
-
-	analysis := GemAnalysis{
-		CompilationTime: 0,
-		Words:           make(map[string]GemScore),
-		TotalSentences:  len(sentences),
-		CreatedAt:       time.Now().UTC(),
-		Score:           GemScore{Jewish: 0, English: 0, Simple: 0},
-	}
-	analysis.ComputeScore(data)
-
-	for w := 0; w < totalWords; w++ {
-		word := words[w]
-
-		re, err := regexp.Compile(`[^a-zA-Z\d]`)
-		if err != nil {
-			log.Fatal(err)
-		}
-		word = re.ReplaceAllString(word, "")
-		word = strings.TrimLeft(word, "")
-
-		a := GemAnalysis{}
-		a.ComputeScore(word)
-
-		analysis.Words[data] = a.Score
-	}
-
-	return analysis
-}
-
-func (a *GemAnalysis) String() string {
-	return fmt.Sprintf("\n%v", a.Score)
-}
-
-func (a *GemAnalysis) ComputeScore(data string) {
 	re, err := regexp.Compile(`[^a-zA-Z\d.\s]`)
 	if err != nil {
 		log.Fatal(err)
@@ -137,18 +85,25 @@ func (a *GemAnalysis) ComputeScore(data string) {
 	data = re.ReplaceAllString(data, "")
 	data = strings.TrimLeft(data, "")
 	dataBytes := []byte(data)
-	a.Text = dataBytes
-	startAt := time.Now()
+	var letters []GemScore
 	for i := 0; i < len(dataBytes); i++ {
 		wat := strings.ToUpper(string(dataBytes[i]))
 		if len(wat) == 1 && wat != "" && wat != " " {
 			j, e, s := charGematrix(wat)
-			a.Score.Jewish += j
-			a.Score.English += e
-			a.Score.Simple += s
+			letters = append(letters, GemScore{
+				Jewish:  j,
+				English: e,
+				Simple:  s,
+			})
 		}
 	}
-	a.CompilationTime = time.Since(startAt)
+	var jf, ef, sf uint
+	for _, gs := range letters {
+		jf += gs.Jewish
+		ef += gs.English
+		sf += gs.Simple
+	}
+	return GemScore{Jewish: jf, English: ef, Simple: sf}
 }
 
 func (s GemScore) String() string {

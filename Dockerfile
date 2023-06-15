@@ -1,4 +1,5 @@
 FROM golang:1.20.4-buster
+MAINTAINER Andrei Merlescu <andrei@projectapario.com>
 WORKDIR /app
 COPY . .
 RUN rm -rf .git
@@ -8,7 +9,8 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     imagemagick \
     libjpeg62-turbo-dev \
-    time \
+    time  \
+    exiftool \
     xz-utils \
     wget \
     && rm -rf /var/lib/apt/lists/*

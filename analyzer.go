@@ -24,6 +24,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	`sync`
 	"time"
 )
 
@@ -32,6 +33,12 @@ func analyze_StartOnFullText(ctx context.Context, pp PendingPage) {
 		wg_active_tasks.Done()
 		ch_AnalyzeCryptonyms <- pp
 	}()
+	file, fileErr := os.ReadFile(pp.OCRTextPath)
+	if fileErr != nil {
+		log.Printf("Error opening file %q: %v\n", pp.OCRTextPath, fileErr)
+		return
+	}
+	pp.Dates = extractDates(string(file))
 }
 
 func analyzeCryptonyms(ctx context.Context, pp PendingPage) {
@@ -39,6 +46,19 @@ func analyzeCryptonyms(ctx context.Context, pp PendingPage) {
 		wg_active_tasks.Done()
 		ch_AnalyzeLocations <- pp
 	}()
+
+	var result []string
+	file, fileErr := os.ReadFile(pp.OCRTextPath)
+	if fileErr != nil {
+		log.Printf("Error opening file %q: %v\n", pp.OCRTextPath, fileErr)
+		return
+	}
+	for key := range m_cryptonyms {
+		if strings.Contains(string(file), key) {
+			result = append(result, key)
+		}
+	}
+	pp.Cryptonyms = result
 }
 
 func analyzeLocations(ctx context.Context, pp PendingPage) {
@@ -177,7 +197,7 @@ func analyzeGematria(ctx context.Context, pp PendingPage) {
 							wr := WordResult{
 								Word:     word,
 								Language: language,
-								Gematria: calculateGemAnalysis(word),
+								Gematria: Gematria{word, NewGemScore(word)},
 							}
 							_, found := fileResults[language]
 							if !found {
@@ -206,17 +226,31 @@ func analyzeGematria(ctx context.Context, pp PendingPage) {
 			var languages = map[string]int{}
 			var selectedLanguage string
 			var totalWords int
+			var twMu = sync.Mutex{}
 			for language, results := range fileResults {
 				languages[language] = len(results)
 			}
 			for language, count := range languages {
 				if len(selectedLanguage) == 0 || count > totalWords {
+					twMu.Lock()
 					selectedLanguage = language
 					totalWords = count
+					twMu.Unlock()
 				}
 			}
 			pp.Language = selectedLanguage
 			pp.Words = fileResults[selectedLanguage]
+			var deDupWords = map[string]WordResult{}
+			for _, wr := range pp.Words {
+				if _, exists := deDupWords[wr.Word]; !exists {
+					deDupWords[wr.Word] = wr
+				}
+			}
+			var cleanedWords []WordResult
+			for _, wr := range deDupWords {
+				cleanedWords = append(cleanedWords, wr)
+			}
+			pp.Words = cleanedWords
 			for _, wr := range pp.Words {
 				output += fmt.Sprintf("-> %v (%v) = %v", wr.Word, wr.Language, wr.Gematria)
 			}
