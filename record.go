@@ -182,7 +182,11 @@ func processRecord(ctx context.Context, row []Column) error {
 	}
 	sm_documents.Store(identifier, rd)
 	log.Printf("sending URL %v (rd struct) into the ch_ImportedRow channel", rd.URL)
-	ch_ImportedRow <- rd
+	err = ch_ImportedRow.Write(rd)
+	if err != nil {
+		log.Printf("cant write to ch_ImportedRow")
+		return err
+	}
 	return nil
 }
 

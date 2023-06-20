@@ -19,15 +19,22 @@ package main
 
 import (
 	"context"
+	`log`
 )
 
 func aggregatePendingPage(ctx context.Context, pp PendingPage) {
-	ch_CompiledDocument <- Document{
-		Identifier:          pp.RecordIdentifier,
-		URL:                 "",
-		Pages:               nil,
-		TotalPages:          0,
-		CoverPageIdentifier: "",
-		Collection:          Collection{},
+	if ch_CompiledDocument.CanWrite() {
+		err := ch_CompiledDocument.Write(Document{
+			Identifier:          pp.RecordIdentifier,
+			URL:                 "",
+			Pages:               nil,
+			TotalPages:          0,
+			CoverPageIdentifier: "",
+			Collection:          Collection{},
+		})
+		if err != nil {
+			log.Printf("cant write to the ch_CompiledDocument channel due to error %v", err)
+			return
+		}
 	}
 }

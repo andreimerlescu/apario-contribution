@@ -22,11 +22,14 @@ import (
 	"fmt"
 	"image/color"
 	"path/filepath"
+	`regexp`
 	"sync"
 	"sync/atomic"
 	"time"
 
 	`github.com/andreimerlescu/configurable`
+	cwg `github.com/andreimerlescu/go-countable-waitgroup`
+	ch `github.com/andreimerlescu/go-smartchan`
 
 	"go-vue-sql-apario/sema"
 )
@@ -80,12 +83,20 @@ var (
 		"dec": time.December, "december": time.December, "12": time.December,
 	}
 
+	// Regex
+	re_date1 = regexp.MustCompile(`(?i)(\d{1,2})(st|nd|rd|th)?\s(?:of\s)?(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec),?\s(\d{2,4})`)
+	re_date2 = regexp.MustCompile(`(?i)(\d{1,2})\/(\d{1,2})\/(\d{2,4})`)
+	re_date3 = regexp.MustCompile(`(?i)(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec),?\s(\d{2,4})`)
+	re_date5 = regexp.MustCompile(`(?i)(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\s(\d{1,2})(st|nd|rd|th)?,?\s(\d{2,4})`)
+	re_date4 = regexp.MustCompile(`(?i)(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\s(\d{4})`)
+	re_date6 = regexp.MustCompile(`(\d{4})`)
+
 	// Synchronization
 	mu_identifier         = sync.RWMutex{}
 	mu_location_countries = sync.RWMutex{}
 	mu_location_states    = sync.RWMutex{}
 	mu_location_cities    = sync.RWMutex{}
-	wg_active_tasks       = sync.WaitGroup{}
+	wg_active_tasks       = cwg.CountableWaitGroup{}
 
 	// Command Line Flags
 	flag_s_file             = config.NewString("file", "", "CSV file of URL + Metadata")
@@ -122,10 +133,25 @@ var (
 	}
 
 	// Atomics
-	a_b_dictionary_loaded = atomic.Bool{}
-	a_b_gematria_loaded   = atomic.Bool{}
-	a_b_locations_loaded  = atomic.Bool{}
-	a_i_total_pages       = atomic.Int64{}
+	a_b_dictionary_loaded           = atomic.Bool{}
+	a_b_gematria_loaded             = atomic.Bool{}
+	a_b_locations_loaded            = atomic.Bool{}
+	a_b_ch_ImportRow_closed         = atomic.Bool{}
+	a_b_ch_ExtractText_closed       = atomic.Bool{}
+	a_b_ch_ExtractPages_closed      = atomic.Bool{}
+	a_b_ch_GeneratePng_closed       = atomic.Bool{}
+	a_b_ch_GenerateLight_closed     = atomic.Bool{}
+	a_b_ch_GenerateDark_closed      = atomic.Bool{}
+	a_b_ch_ConvertToJpg_closed      = atomic.Bool{}
+	a_b_ch_PerformOcr_closed        = atomic.Bool{}
+	a_b_ch_AnalyzeText_closed       = atomic.Bool{}
+	a_b_ch_AnalyzeCryptonyms_closed = atomic.Bool{}
+	a_b_ch_AnalyzeLocations_closed  = atomic.Bool{}
+	a_b_ch_AnalyzeGematria_closed   = atomic.Bool{}
+	a_b_ch_AnalyzeDictionary_closed = atomic.Bool{}
+	a_b_ch_CompletedPage_closed     = atomic.Bool{}
+	a_b_ch_CompiledDocument_closed  = atomic.Bool{}
+	a_i_total_pages                 = atomic.Int64{}
 
 	// Concurrent Maps
 	sm_page_directories sync.Map
@@ -150,21 +176,21 @@ var (
 	sem_wjsonfile  = sema.New(*flag_g_sem_wjsonfile)
 
 	// Channels
-	ch_ImportedRow       = make(chan ResultData, channel_buffer_size)
-	ch_ExtractText       = make(chan ResultData, channel_buffer_size)
-	ch_ExtractPages      = make(chan ResultData, channel_buffer_size)
-	ch_GeneratePng       = make(chan PendingPage, channel_buffer_size)
-	ch_GenerateLight     = make(chan PendingPage, channel_buffer_size)
-	ch_GenerateDark      = make(chan PendingPage, channel_buffer_size)
-	ch_ConvertToJpg      = make(chan PendingPage, channel_buffer_size)
-	ch_PerformOcr        = make(chan PendingPage, channel_buffer_size)
-	ch_AnalyzeText       = make(chan PendingPage, channel_buffer_size)
-	ch_AnalyzeCryptonyms = make(chan PendingPage, channel_buffer_size)
-	ch_AnalyzeGematria   = make(chan PendingPage, channel_buffer_size)
-	ch_AnalyzeLocations  = make(chan PendingPage, channel_buffer_size)
-	ch_AnalyzeDictionary = make(chan PendingPage, channel_buffer_size)
-	ch_CompletedPage     = make(chan PendingPage, channel_buffer_size)
-	ch_CompiledDocument  = make(chan Document, channel_buffer_size)
+	ch_ImportedRow       = ch.NewSmartChan(channel_buffer_size)
+	ch_ExtractText       = ch.NewSmartChan(channel_buffer_size)
+	ch_ExtractPages      = ch.NewSmartChan(channel_buffer_size)
+	ch_GeneratePng       = ch.NewSmartChan(channel_buffer_size)
+	ch_GenerateLight     = ch.NewSmartChan(channel_buffer_size)
+	ch_GenerateDark      = ch.NewSmartChan(channel_buffer_size)
+	ch_ConvertToJpg      = ch.NewSmartChan(channel_buffer_size)
+	ch_PerformOcr        = ch.NewSmartChan(channel_buffer_size)
+	ch_AnalyzeText       = ch.NewSmartChan(channel_buffer_size)
+	ch_AnalyzeCryptonyms = ch.NewSmartChan(channel_buffer_size)
+	ch_AnalyzeGematria   = ch.NewSmartChan(channel_buffer_size)
+	ch_AnalyzeLocations  = ch.NewSmartChan(channel_buffer_size)
+	ch_AnalyzeDictionary = ch.NewSmartChan(channel_buffer_size)
+	ch_CompletedPage     = ch.NewSmartChan(channel_buffer_size)
+	ch_CompiledDocument  = ch.NewSmartChan(channel_buffer_size)
 	ch_Done              = make(chan struct{}, 1)
 )
 

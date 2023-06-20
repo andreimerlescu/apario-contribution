@@ -24,10 +24,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	`os/exec`
 	"os/signal"
 	"path/filepath"
+	`runtime`
 	"strings"
 	"syscall"
+	`time`
 )
 
 func main() {
@@ -111,23 +114,65 @@ func main() {
 			log.Printf("failed to close the logFile due to error: %v", err)
 		}
 		cancel()
-		close(ch_ImportedRow)       // step 01
-		close(ch_ExtractText)       // step 02
-		close(ch_ExtractPages)      // step 03
-		close(ch_GeneratePng)       // step 04
-		close(ch_GenerateLight)     // step 05
-		close(ch_GenerateDark)      // step 06
-		close(ch_ConvertToJpg)      // step 07
-		close(ch_PerformOcr)        // step 08
-		close(ch_AnalyzeText)       // step 09
-		close(ch_AnalyzeCryptonyms) // step 10
-		close(ch_AnalyzeLocations)  // step 11
-		close(ch_AnalyzeGematria)   // step 12
-		close(ch_AnalyzeDictionary) // step 13
-		close(ch_CompletedPage)     // step 14
-		fmt.Println("Program killed!")
+
+		wg_active_tasks.PreventAdd()
+
+		ch_ImportedRow.Close()       // step 01
+		ch_ExtractText.Close()       // step 02
+		ch_ExtractPages.Close()      // step 03
+		ch_GeneratePng.Close()       // step 04
+		ch_GenerateLight.Close()     // step 05
+		ch_GenerateDark.Close()      // step 06
+		ch_ConvertToJpg.Close()      // step 07
+		ch_PerformOcr.Close()        // step 08
+		ch_AnalyzeText.Close()       // step 09
+		ch_AnalyzeCryptonyms.Close() // step 10
+		ch_AnalyzeLocations.Close()  // step 11
+		ch_AnalyzeGematria.Close()   // step 12
+		ch_AnalyzeDictionary.Close() // step 13
+		ch_CompletedPage.Close()     // step 14
+		ch_CompiledDocument.Close()  // step 15
+
+		fmt.Printf("Completed running in %d", time.Since(startedAt))
+
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "windows":
+			cmd = exec.Command("tasklist", "/FI", "IMAGENAME eq apario-contribution.exe")
+		default:
+			cmd = exec.Command("pgrep", "apario-contribution")
+		}
+
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+
+		pids := parsePIDs(string(output))
+
+		for _, pid := range pids {
+			terminatePID(pid)
+		}
+
 		os.Exit(0)
 	}()
+
+	a_b_ch_ImportRow_closed.Store(false)
+	a_b_ch_ExtractText_closed.Store(false)
+	a_b_ch_ExtractPages_closed.Store(false)
+	a_b_ch_GeneratePng_closed.Store(false)
+	a_b_ch_GenerateLight_closed.Store(false)
+	a_b_ch_GenerateDark_closed.Store(false)
+	a_b_ch_ConvertToJpg_closed.Store(false)
+	a_b_ch_PerformOcr_closed.Store(false)
+	a_b_ch_AnalyzeText_closed.Store(false)
+	a_b_ch_AnalyzeCryptonyms_closed.Store(false)
+	a_b_ch_AnalyzeLocations_closed.Store(false)
+	a_b_ch_AnalyzeGematria_closed.Store(false)
+	a_b_ch_AnalyzeDictionary_closed.Store(false)
+	a_b_ch_CompletedPage_closed.Store(false)
+	a_b_ch_CompiledDocument_closed.Store(false)
 
 	a_b_dictionary_loaded.Store(false)
 	go populateDictionary()
@@ -151,21 +196,21 @@ func main() {
 
 	ctx = context.WithValue(ctx, CtxKey("filename"), *flag_s_file)
 
-	go receiveImportedRow(ctx, ch_ImportedRow)             // step 01 - runs validatePdf before sending into ch_ExtractText
-	go receiveOnExtractTextCh(ctx, ch_ExtractText)         // step 02 - runs extractPlainTextFromPdf before sending into ch_ExtractPages
-	go receiveOnExtractPagesCh(ctx, ch_ExtractPages)       // step 03 - runs extractPagesFromPdf before sending PendingPage into ch_GeneratePng
-	go receiveOnGeneratePngCh(ctx, ch_GeneratePng)         // step 04 - runs convertPageToPng before sending PendingPage into ch_GenerateLight
-	go receiveOnGenerateLightCh(ctx, ch_GenerateLight)     // step 05 - runs generateLightThumbnails before sending PendingPage into ch_GenerateDark
-	go receiveOnGenerateDarkCh(ctx, ch_GenerateDark)       // step 06 - runs generateDarkThumbnails before sending PendingPage into ch_ConvertToJpg
-	go receiveOnConvertToJpg(ctx, ch_ConvertToJpg)         // step 07 - runs convertPngToJpg before sending PendingPage into ch_PerformOcr
-	go receiveOnPerformOcrCh(ctx, ch_PerformOcr)           // step 08 - runs performOcrOnPdf before sending PendingPage into ch_AnalyzeText
-	go receiveFullTextToAnalyze(ctx, ch_AnalyzeText)       // step 09 - runs analyze_StartOnFullText before sending PendingPage into ch_AnalyzeCryptonyms
-	go receiveAnalyzeCryptonym(ctx, ch_AnalyzeCryptonyms)  // step 10 - runs analyzeCryptonyms before sending PendingPage into ch_AnalyzeLocations
-	go receiveAnalyzeLocations(ctx, ch_AnalyzeLocations)   // step 11 - runs analyzeLocations before sending PendingPage into ch_AnalyzeGematria
-	go receiveAnalyzeGematria(ctx, ch_AnalyzeGematria)     // step 12 - runs analyzeGematria before sending PendingPage into ch_AnalyzeDictionary
-	go receiveAnalyzeDictionary(ctx, ch_AnalyzeDictionary) // step 13 - runs analyzeWordIndexer before sending PendingPage into ch_CompletedPage
-	go receiveCompletedPendingPage(ctx, ch_CompletedPage)  // step 14 - compiles a final result of a Document before sending it into ch_CompiledDocument
-	go receiveCompiledDocument(ctx, ch_CompiledDocument)   // step 15 - compiles the SQL insert statements for the Document
+	go receiveImportedRow(ctx, ch_ImportedRow.Chan())             // step 01 - runs validatePdf before sending into ch_ExtractText
+	go receiveOnExtractTextCh(ctx, ch_ExtractText.Chan())         // step 02 - runs extractPlainTextFromPdf before sending into ch_ExtractPages
+	go receiveOnExtractPagesCh(ctx, ch_ExtractPages.Chan())       // step 03 - runs extractPagesFromPdf before sending PendingPage into ch_GeneratePng
+	go receiveOnGeneratePngCh(ctx, ch_GeneratePng.Chan())         // step 04 - runs convertPageToPng before sending PendingPage into ch_GenerateLight
+	go receiveOnGenerateLightCh(ctx, ch_GenerateLight.Chan())     // step 05 - runs generateLightThumbnails before sending PendingPage into ch_GenerateDark
+	go receiveOnGenerateDarkCh(ctx, ch_GenerateDark.Chan())       // step 06 - runs generateDarkThumbnails before sending PendingPage into ch_ConvertToJpg
+	go receiveOnConvertToJpg(ctx, ch_ConvertToJpg.Chan())         // step 07 - runs convertPngToJpg before sending PendingPage into ch_PerformOcr
+	go receiveOnPerformOcrCh(ctx, ch_PerformOcr.Chan())           // step 08 - runs performOcrOnPdf before sending PendingPage into ch_AnalyzeText
+	go receiveFullTextToAnalyze(ctx, ch_AnalyzeText.Chan())       // step 09 - runs analyze_StartOnFullText before sending PendingPage into ch_AnalyzeCryptonyms
+	go receiveAnalyzeCryptonym(ctx, ch_AnalyzeCryptonyms.Chan())  // step 10 - runs analyzeCryptonyms before sending PendingPage into ch_AnalyzeLocations
+	go receiveAnalyzeLocations(ctx, ch_AnalyzeLocations.Chan())   // step 11 - runs analyzeLocations before sending PendingPage into ch_AnalyzeGematria
+	go receiveAnalyzeGematria(ctx, ch_AnalyzeGematria.Chan())     // step 12 - runs analyzeGematria before sending PendingPage into ch_AnalyzeDictionary
+	go receiveAnalyzeDictionary(ctx, ch_AnalyzeDictionary.Chan()) // step 13 - runs analyzeWordIndexer before sending PendingPage into ch_CompletedPage
+	go receiveCompletedPendingPage(ctx, ch_CompletedPage.Chan())  // step 14 - compiles a final result of a Document before sending it into ch_CompiledDocument
+	go receiveCompiledDocument(ctx, ch_CompiledDocument.Chan())   // step 15 - compiles the SQL insert statements for the Document
 
 	go func() {
 		wg_active_tasks.Add(1)
@@ -206,8 +251,12 @@ func main() {
 			log.SetOutput(os.Stdout)
 			log.Printf("done processing everything... time to end things now!")
 			watchdog <- os.Kill
-		case d, ok := <-ch_CompiledDocument:
+		case id, ok := <-ch_CompiledDocument.Chan():
 			if ok {
+				d, ok := id.(Document)
+				if !ok {
+					log.Printf("cannot typecast the final result for %d as a .(Document)", d.Identifier)
+				}
 				log.Printf("Completed processing document %v", d.Identifier)
 			}
 		}

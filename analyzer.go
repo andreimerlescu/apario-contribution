@@ -30,8 +30,15 @@ import (
 
 func analyze_StartOnFullText(ctx context.Context, pp PendingPage) {
 	defer func() {
+		pp_save(pp)
 		wg_active_tasks.Done()
-		ch_AnalyzeCryptonyms <- pp
+		if ch_AnalyzeCryptonyms.CanWrite() {
+			err := ch_AnalyzeCryptonyms.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_AnalyzeCryptonyms channel due to error %v", err)
+				return
+			}
+		}
 	}()
 	file, fileErr := os.ReadFile(pp.OCRTextPath)
 	if fileErr != nil {
@@ -43,8 +50,15 @@ func analyze_StartOnFullText(ctx context.Context, pp PendingPage) {
 
 func analyzeCryptonyms(ctx context.Context, pp PendingPage) {
 	defer func() {
+		pp_save(pp)
 		wg_active_tasks.Done()
-		ch_AnalyzeLocations <- pp
+		if ch_AnalyzeLocations.CanWrite() {
+			err := ch_AnalyzeLocations.Write(pp)
+			if err != nil {
+				log.Printf("cannot write to the ch_AnalyzeLocations channel due to error %v", err)
+				return
+			}
+		}
 	}()
 
 	var result []string
@@ -63,8 +77,15 @@ func analyzeCryptonyms(ctx context.Context, pp PendingPage) {
 
 func analyzeLocations(ctx context.Context, pp PendingPage) {
 	defer func() {
+		pp_save(pp)
 		wg_active_tasks.Done()
-		ch_AnalyzeGematria <- pp
+		if ch_AnalyzeGematria.CanWrite() {
+			err := ch_AnalyzeGematria.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_AnalyzeGematria channel due to error %v", err)
+				return
+			}
+		}
 	}()
 
 	for {
@@ -108,12 +129,15 @@ func analyzeLocations(ctx context.Context, pp PendingPage) {
 				for _, word := range words {
 					if location, ok := m_location_countries[word]; ok {
 						fileLocations = append(fileLocations, location)
+						log.Printf("found a country location %v inside pp.PDFPath %v", word, pp.PDFPath)
 					}
 					if location, ok := m_location_states[word]; ok {
 						fileLocations = append(fileLocations, location)
+						log.Printf("found a state location %v inside pp.PDFPath %v", word, pp.PDFPath)
 					}
 					if location, ok := m_location_cities[word]; ok {
 						fileLocations = append(fileLocations, location)
+						log.Printf("found a city location %v inside pp.PDFPath %v", word, pp.PDFPath)
 					}
 				}
 			}
@@ -146,8 +170,15 @@ func analyzeLocations(ctx context.Context, pp PendingPage) {
 
 func analyzeGematria(ctx context.Context, pp PendingPage) {
 	defer func() {
+		pp_save(pp)
 		wg_active_tasks.Done()
-		ch_AnalyzeDictionary <- pp
+		if ch_AnalyzeDictionary.CanWrite() {
+			err := ch_AnalyzeDictionary.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_AnalyzeDictionary channel due to error %v", err)
+				return
+			}
+		}
 	}()
 
 	for {
@@ -263,8 +294,15 @@ func analyzeGematria(ctx context.Context, pp PendingPage) {
 
 func analyzeWordIndexer(ctx context.Context, pp PendingPage) {
 	defer func() {
+		pp_save(pp)
 		wg_active_tasks.Done()
-		ch_CompletedPage <- pp
+		if ch_CompletedPage.CanWrite() {
+			err := ch_CompletedPage.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_CompletedPage channel due to error %v", err)
+				return
+			}
+		}
 	}()
 
 	for {
@@ -278,12 +316,6 @@ func analyzeWordIndexer(ctx context.Context, pp PendingPage) {
 		case <-ctx.Done():
 			return
 		}
-	}
-
-	sm_pages.Store(pp.Identifier, pp)
-	err := WritePendingPageToJson(pp)
-	if err != nil {
-		log.Printf("failed to write pending page %v to %v because of error %v", pp.Identifier, pp.ManifestPath, err)
 	}
 
 	return

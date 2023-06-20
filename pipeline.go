@@ -96,7 +96,12 @@ func extractPlainTextFromPdf(ctx context.Context, record ResultData) {
 	defer func() {
 		log.Printf("finished extracting the text from the PDF %v, now sending rd into ch_ExtractPages", filepath.Base(record.PDFPath))
 		wg_active_tasks.Done()
-		ch_ExtractPages <- record
+		if ch_ExtractPages.CanWrite() {
+			err := ch_ExtractPages.Write(record)
+			if err != nil {
+				log.Printf("failed to write record %v into the ch_ExtractPages due to error %v", record, err)
+			}
+		}
 	}()
 	log.Printf("started extractPlainTextFromPdf(%v) = %v", record.Identifier, record.PDFPath)
 	if ok, err := fileHasData(record.ExtractedTextPath); !ok || err != nil {
@@ -233,7 +238,14 @@ func extractPagesFromPdf(ctx context.Context, record ResultData) {
 			// 08 - analyzeLocations - done
 			// 09 - analyzeGematria - done
 			// 10 - analyzeWordIndexer - done
-			ch_GeneratePng <- pp
+
+			if ch_GeneratePng.CanWrite() {
+				err := ch_GeneratePng.Write(pp)
+				if err != nil {
+					log.Printf("cannot send pp into ch_GeneratePng channel due to error %v", err)
+					return err
+				}
+			}
 		}
 
 		return nil
@@ -285,7 +297,13 @@ func convertPageToPng(ctx context.Context, pp PendingPage) {
 	}
 
 	log.Printf("completed convertPageToPng now sending %v (%v.%v) -> ch_GenerateLight ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
-	ch_GenerateLight <- pp
+	if ch_GenerateLight.CanWrite() {
+		err := ch_GenerateLight.Write(pp)
+		if err != nil {
+			log.Printf("canot send pp into ch_GenerateLight due to error %v", err)
+			return
+		}
+	}
 	return
 }
 
@@ -293,7 +311,13 @@ func generateLightThumbnails(ctx context.Context, pp PendingPage) {
 	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed generateLightThumbnails now sending %v (%v.%v) -> ch_GenerateDark ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
-		ch_GenerateDark <- pp
+		if ch_GenerateDark.CanWrite() {
+			err := ch_GenerateDark.Write(pp)
+			if err != nil {
+				log.Printf("cannot send pp into the ch_GenerateDark due to error %v", err)
+				return
+			}
+		}
 	}()
 	log.Printf("started generateLightThumbnails(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 
@@ -339,7 +363,13 @@ func generateDarkThumbnails(ctx context.Context, pp PendingPage) {
 	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed generateDarkThumbnails now sending %v (%v.%v) -> ch_PerformOcr ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
-		ch_PerformOcr <- pp
+		if ch_PerformOcr.CanWrite() {
+			err := ch_PerformOcr.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_PerformOcr due to error %v", err)
+				return
+			}
+		}
 	}()
 	log.Printf("started generateDarkThumbnails(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 	// task: the pp.Light.Original into pp.Dark.Original
@@ -417,7 +447,13 @@ func performOcrOnPdf(ctx context.Context, pp PendingPage) {
 	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed performOcrOnPdf now sending %v (%v.%v) -> ch_ConvertToJpg ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
-		ch_ConvertToJpg <- pp
+		if ch_ConvertToJpg.CanWrite() {
+			err := ch_ConvertToJpg.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_ConverToJpg due to error %v", err)
+				return
+			}
+		}
 	}()
 
 	if ok, err := fileHasData(pp.OCRTextPath); !ok || err != nil {
@@ -454,7 +490,13 @@ func convertPngToJpg(ctx context.Context, pp PendingPage) {
 	defer wg_active_tasks.Done()
 	defer func() {
 		log.Printf("completed convertPngToJpg now sending %v (%v.%v) -> ch_CompletedPage ", pp.PDFPath, pp.RecordIdentifier, pp.Identifier)
-		ch_AnalyzeText <- pp
+		if ch_AnalyzeText.CanWrite() {
+			err := ch_AnalyzeText.Write(pp)
+			if err != nil {
+				log.Printf("cant write to the ch_AnalyzeText channel due to error %v", err)
+				return
+			}
+		}
 	}()
 	log.Printf("started convertPngToJpg(%v.%v) = %v", pp.RecordIdentifier, pp.Identifier, pp.PDFPath)
 	files := map[string]string{

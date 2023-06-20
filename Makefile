@@ -23,6 +23,7 @@ containered:
 	./$(PROJECT) -dir tmp -file importable/$(filter-out $@,$(MAKECMDGOALS)) -limit 33 -buffer 454545 -pdfcpu 1 -gs 1 -pdftotext 1 -convert 1 -pdftoppm 1 -png2jpg 1 -resize 1 -shafile 1 -watermark 1 -darkimage 1 -filedata 3 -shastring 3 -wjsonfile 3 -log ./$(LOGFILE) &
 	PID=$$!; \
 	{ tail -f $(LOGFILE) & wait $$PID; } | grep -q "done processing everything"
+	bash
 
 dbuild:
 	docker build -t $(PROJECT):$(TAG) .
