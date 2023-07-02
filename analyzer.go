@@ -26,6 +26,8 @@ import (
 	"strings"
 	`sync`
 	"time"
+
+	cwg `github.com/andreimerlescu/go-countable-waitgroup`
 )
 
 func analyze_StartOnFullText(ctx context.Context, pp PendingPage) {
@@ -101,53 +103,102 @@ func analyzeLocations(ctx context.Context, pp PendingPage) {
 		}
 	}
 
-	done := make(chan struct{})
-
-	var fileLocations []*Location
+	done := make(chan Geography)
 
 	go func() {
+		var geography = Geography{
+			Countries: []CountableLocation{},
+			States:    []CountableLocation{},
+			Cities:    []CountableLocation{},
+		}
+		var mu_geography = sync.Mutex{}
 		defer func() {
-			done <- struct{}{}
+			done <- geography
 			close(done)
 		}()
 
-		file, fileErr := os.Open(pp.OCRTextPath)
+		b_fullText, fileErr := os.ReadFile(pp.OCRTextPath)
 		if fileErr != nil {
 			log.Printf("Error opening file %q: %v\n", pp.OCRTextPath, fileErr)
 			return
 		}
+		fullText := strings.ToLower(string(b_fullText))
 
-		scanner := bufio.NewScanner(file)
-
-		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				line := scanner.Text()
-				words := strings.Fields(line)
-				for _, word := range words {
-					if location, ok := m_location_countries[word]; ok {
-						fileLocations = append(fileLocations, location)
-						log.Printf("found a country location %v inside pp.PDFPath %v", word, pp.PDFPath)
-					}
-					if location, ok := m_location_states[word]; ok {
-						fileLocations = append(fileLocations, location)
-						log.Printf("found a state location %v inside pp.PDFPath %v", word, pp.PDFPath)
-					}
-					if location, ok := m_location_cities[word]; ok {
-						fileLocations = append(fileLocations, location)
-						log.Printf("found a city location %v inside pp.PDFPath %v", word, pp.PDFPath)
+		wg := cwg.CountableWaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Printf("checking pp PDF %v location countries inside a total of %d countries", pp.OCRTextPath, len(m_location_countries))
+			var e_countries = make(map[string]*Location)
+			for _, country := range m_location_countries {
+				c := strings.ToLower(country.Country)
+				if len(c) == 0 {
+					continue
+				}
+				if strings.Contains(fullText, c) {
+					if _, ok := e_countries[c]; !ok {
+						mu_geography.Lock()
+						geography.Countries = append(geography.Countries, CountableLocation{
+							Location: country,
+							Quantity: strings.Count(fullText, c),
+						})
+						e_countries[c] = country
+						mu_geography.Unlock()
 					}
 				}
 			}
-		}
+		}()
 
-		if err := scanner.Err(); err != nil {
-			log.Println(err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Printf("checking pp PDF %v location states inside a total of %d states", pp.OCRTextPath, len(m_location_states))
+			var e_states = make(map[string]*Location)
+			for _, state := range m_location_states {
+				s := strings.ToLower(state.State)
+				if len(s) == 0 {
+					continue
+				}
+				if strings.Contains(fullText, s) {
+					if _, ok := e_states[s]; !ok {
+						mu_geography.Lock()
+						geography.States = append(geography.States, CountableLocation{
+							Location: state,
+							Quantity: strings.Count(fullText, s),
+						})
+						e_states[s] = state
+						mu_geography.Unlock()
+					}
+				}
+			}
+		}()
 
-		file.Close()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Printf("checking pp PDF %v location cities inside a total of %d cities", pp.OCRTextPath, len(m_location_cities))
+			var e_cities = make(map[string]*Location)
+			for _, city := range m_location_cities {
+				c := strings.ToLower(city.City)
+				if len(c) == 0 {
+					continue
+				}
+				if strings.Contains(fullText, c) {
+					if _, ok := e_cities[c]; !ok {
+						mu_geography.Lock()
+						geography.Cities = append(geography.Cities, CountableLocation{
+							Location: city,
+							Quantity: strings.Count(fullText, c),
+						})
+						e_cities[c] = city
+						mu_geography.Unlock()
+					}
+				}
+			}
+		}()
+
+		wg.PreventAdd()
+		wg.Wait()
 
 		return
 	}()
@@ -156,13 +207,10 @@ func analyzeLocations(ctx context.Context, pp PendingPage) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-done:
-			output := fmt.Sprintf("Locations in OCR file %v", pp.OCRTextPath)
-			for _, l := range fileLocations {
-				output += fmt.Sprintf("-> city `%v` in country `%v` state `%v`", l.City, l.Country, l.State)
+		case geography, opened := <-done:
+			if opened {
+				pp.Geography = geography
 			}
-			pp.Locations = fileLocations
-			log.Println(output)
 			return
 		}
 	}
@@ -226,8 +274,6 @@ func analyzeGematria(ctx context.Context, pp PendingPage) {
 					for language, dictionary := range m_language_dictionary {
 						if _, ok := dictionary[word]; ok {
 							wr := WordResult{
-								Word:     word,
-								Language: language,
 								Gematria: Gematria{word, NewGemScore(word)},
 							}
 							_, found := fileResults[language]

@@ -59,9 +59,9 @@ var (
 
 	// Maps
 	m_cryptonyms          = make(map[string]string)
-	m_location_cities     = make(map[string]*Location)
-	m_location_countries  = make(map[string]*Location)
-	m_location_states     = make(map[string]*Location)
+	m_location_cities     []*Location
+	m_location_countries  []*Location
+	m_location_states     []*Location
 	m_used_identifiers    = make(map[string]bool)
 	m_required_binaries   = make(map[string]string)
 	m_language_dictionary = make(map[string]map[string]struct{})
@@ -133,25 +133,10 @@ var (
 	}
 
 	// Atomics
-	a_b_dictionary_loaded           = atomic.Bool{}
-	a_b_gematria_loaded             = atomic.Bool{}
-	a_b_locations_loaded            = atomic.Bool{}
-	a_b_ch_ImportRow_closed         = atomic.Bool{}
-	a_b_ch_ExtractText_closed       = atomic.Bool{}
-	a_b_ch_ExtractPages_closed      = atomic.Bool{}
-	a_b_ch_GeneratePng_closed       = atomic.Bool{}
-	a_b_ch_GenerateLight_closed     = atomic.Bool{}
-	a_b_ch_GenerateDark_closed      = atomic.Bool{}
-	a_b_ch_ConvertToJpg_closed      = atomic.Bool{}
-	a_b_ch_PerformOcr_closed        = atomic.Bool{}
-	a_b_ch_AnalyzeText_closed       = atomic.Bool{}
-	a_b_ch_AnalyzeCryptonyms_closed = atomic.Bool{}
-	a_b_ch_AnalyzeLocations_closed  = atomic.Bool{}
-	a_b_ch_AnalyzeGematria_closed   = atomic.Bool{}
-	a_b_ch_AnalyzeDictionary_closed = atomic.Bool{}
-	a_b_ch_CompletedPage_closed     = atomic.Bool{}
-	a_b_ch_CompiledDocument_closed  = atomic.Bool{}
-	a_i_total_pages                 = atomic.Int64{}
+	a_b_dictionary_loaded = atomic.Bool{}
+	a_b_gematria_loaded   = atomic.Bool{}
+	a_b_locations_loaded  = atomic.Bool{}
+	a_i_total_pages       = atomic.Int64{}
 
 	// Concurrent Maps
 	sm_page_directories sync.Map
@@ -213,6 +198,17 @@ type Page struct {
 	Locations          []*Location       `json:"locations"`
 }
 
+type Geography struct {
+	Countries []CountableLocation `json:"countries"`
+	States    []CountableLocation `json:"states"`
+	Cities    []CountableLocation `json:"cities"`
+}
+
+type CountableLocation struct {
+	Location *Location `json:"location"`
+	Quantity int       `json:"quantity"`
+}
+
 type Location struct {
 	Continent   string  `json:"continent"`
 	Country     string  `json:"country"`
@@ -263,7 +259,7 @@ type PendingPage struct {
 	Words            []WordResult        `json:"words"`
 	Cryptonyms       []string            `json:"cryptonyms"`
 	Dates            []time.Time         `json:"dates"`
-	Locations        []*Location         `json:"locations"`
+	Geography        Geography           `json:"geography"`
 	Gematrias        map[string]Gematria `json:"gematrias"`
 	JPEG             JPEG                `json:"jpeg"`
 	PNG              PNG                 `json:"png"`

@@ -44,7 +44,9 @@ func loadCsv(ctx context.Context, filename string, callback CallbackFunc) error 
 	}(file)
 	bufferedReader := bufio.NewReaderSize(file, reader_buffer_bytes)
 	reader := csv.NewReader(bufferedReader)
-	reader.Comma = '|'
+	if strings.HasSuffix(filename, ".psv") {
+		reader.Comma = '|'
+	}
 	reader.FieldsPerRecord = -1
 	headerFields, bufferReadErr := reader.Read()
 	if bufferReadErr != nil {

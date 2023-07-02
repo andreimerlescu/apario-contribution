@@ -158,22 +158,6 @@ func main() {
 		os.Exit(0)
 	}()
 
-	a_b_ch_ImportRow_closed.Store(false)
-	a_b_ch_ExtractText_closed.Store(false)
-	a_b_ch_ExtractPages_closed.Store(false)
-	a_b_ch_GeneratePng_closed.Store(false)
-	a_b_ch_GenerateLight_closed.Store(false)
-	a_b_ch_GenerateDark_closed.Store(false)
-	a_b_ch_ConvertToJpg_closed.Store(false)
-	a_b_ch_PerformOcr_closed.Store(false)
-	a_b_ch_AnalyzeText_closed.Store(false)
-	a_b_ch_AnalyzeCryptonyms_closed.Store(false)
-	a_b_ch_AnalyzeLocations_closed.Store(false)
-	a_b_ch_AnalyzeGematria_closed.Store(false)
-	a_b_ch_AnalyzeDictionary_closed.Store(false)
-	a_b_ch_CompletedPage_closed.Store(false)
-	a_b_ch_CompiledDocument_closed.Store(false)
-
 	a_b_dictionary_loaded.Store(false)
 	go populateDictionary()
 

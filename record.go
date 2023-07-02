@@ -216,8 +216,6 @@ func processLocation(ctx context.Context, row []Column) error {
 			if len(column.Value) > 0 {
 				longitude, floatConversionErr = strconv.ParseFloat(column.Value, 32)
 			}
-		default:
-			log.Printf("skipping column %v because its header is not accepted", column.Header)
 		}
 	}
 
@@ -239,16 +237,19 @@ func processLocation(ctx context.Context, row []Column) error {
 		Latitude:    latitude,
 	}
 
+	cityName = strings.ToLower(cityName)
 	mu_location_cities.Lock()
-	m_location_cities[cityName] = location
+	m_location_cities = append(m_location_cities, location)
 	mu_location_cities.Unlock()
 
+	countryName = strings.ToLower(countryName)
 	mu_location_countries.Lock()
-	m_location_countries[countryName] = location
+	m_location_countries = append(m_location_countries, location)
 	mu_location_countries.Unlock()
 
+	stateProvinceName = strings.ToLower(stateProvinceName)
 	mu_location_states.Lock()
-	m_location_states[stateProvinceName] = location
+	m_location_states = append(m_location_states, location)
 	mu_location_states.Unlock()
 	return nil
 }
