@@ -199,14 +199,14 @@ func main() {
 	go func() {
 		wg_active_tasks.Add(1)
 		defer wg_active_tasks.Done()
-		locationsCsvErr := loadCsv(ctx, filepath.Join(".", "private", "locations.csv"), processLocation)
+
+		locationsCsvErr := loadCsv(ctx, *flag_s_locations_file, processLocation)
 		if locationsCsvErr != nil {
 			log.Printf("received an error from loadCsv/loadXlsx namely: %v", locationsCsvErr) // a problem habbened
 			return
 		}
 
 		a_b_locations_loaded.Store(true)
-
 	}()
 
 	var importErr error

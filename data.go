@@ -100,6 +100,7 @@ var (
 
 	// Command Line Flags
 	flag_s_file             = config.NewString("file", "", "CSV file of URL + Metadata")
+	flag_s_locations_file   = config.NewString("locations-file", filepath.Join(".", "private", "locations.csv"), "Path to the locations.csv file to load.")
 	flag_s_directory        = config.NewString("dir", "", "Path of the directory you want the export to be generated into.")
 	flag_i_sem_limiter      = config.NewInt("limit", channel_buffer_size, "Number of rows to concurrently process.")
 	flag_i_buffer           = config.NewInt("buffer", reader_buffer_bytes, "Memory allocation for CSV buffer (min 168 * 1024 = 168KB)")
